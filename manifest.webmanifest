@@ -1,0 +1,12 @@
+{
+  "name": "Convertidor a PDF",
+  "short_name": "Convertidor",
+  "description": "Word, Excel y PowerPoint a PDF dentro del navegador, sin subir tus archivos.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f7",
+  "theme_color": "#2A6478",
+  "lang": "es",
+  "icons": [{ "src": "icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

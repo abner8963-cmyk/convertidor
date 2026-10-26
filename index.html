@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convertidor a PDF</title>
+<meta name="description" content="Convierte Word, Excel y PowerPoint a PDF dentro del navegador, sin subir tus archivos.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<meta name="theme-color" content="#2A6478">
+<style>
+  :root {
+    --fondo: #f4f6f7; --tarjeta: #ffffff; --texto: #1d2428; --suave: #5c6870; --borde: #d9e0e3;
+    --acento: #2A6478; --acento-claro: #e3eef1; --ok: #2f7d4f; --error: #b3261e; --barra: #cfdde2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #12171a; --tarjeta: #1b2226; --texto: #e6ecee; --suave: #9aa8ae; --borde: #2c373d;
+      --acento: #5fa8be; --acento-claro: #1f3138; --ok: #6cc28e; --error: #f2857c; --barra: #2c3d44;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 26px; margin: 4px 0 4px; display: flex; align-items: center; gap: 10px; }
+  h1 img { width: 34px; height: 34px; }
+  .sub { color: var(--suave); margin: 0 0 20px; }
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  #estado b { display: block; margin-bottom: 4px; }
+  #estado p { margin: 0; color: var(--suave); font-size: 14px; }
+  .barra { height: 8px; background: var(--barra); border-radius: 99px; overflow: hidden; margin-top: 12px; }
+  .barra div { height: 100%; width: 0; background: var(--acento); transition: width .3s; }
+  .barra.indef div { width: 35%; animation: ir 1.4s ease-in-out infinite; }
+  @keyframes ir { from { margin-left: -35%; } to { margin-left: 100%; } }
+  button { font: inherit; border: 0; border-radius: 10px; padding: 10px 16px; cursor: pointer; background: var(--acento); color: #fff; font-weight: 600; }
+  button.secundario { background: var(--acento-claro); color: var(--acento); }
+  button:disabled { opacity: .5; cursor: default; }
+  #zona { border: 2px dashed var(--borde); border-radius: 14px; padding: 28px 16px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
+  #zona.encima { border-color: var(--acento); background: var(--acento-claro); }
+  #zona b { display: block; font-size: 18px; margin-bottom: 4px; }
+  #zona span { color: var(--suave); font-size: 14px; }
+  #lista { list-style: none; margin: 0; padding: 0; }
+  #lista li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--borde); }
+  #lista li:first-child { border-top: 0; }
+  .nombre { flex: 1; min-width: 0; }
+  .nombre div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .nombre small { color: var(--suave); }
+  .nombre small.error { color: var(--error); }
+  a.bajar { text-decoration: none; background: var(--acento); color: #fff; border-radius: 10px; padding: 8px 14px; font-weight: 600; white-space: nowrap; }
+  .pie { color: var(--suave); font-size: 13px; text-align: center; margin-top: 24px; }
+  .pie a { color: var(--acento); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1><img src="icono.svg" alt="">Convertidor a PDF</h1>
+  <p class="sub">Word, Excel y PowerPoint a PDF. Todo pasa en tu navegador: tus archivos no se suben a ningún lado.</p>
+
+  <section class="tarjeta" id="estado" aria-live="polite">
+    <b id="estadoTitulo">Revisando…</b>
+    <p id="estadoTexto"></p>
+    <div class="barra" id="barra" hidden><div></div></div>
+    <p style="margin-top:12px" id="preparar" hidden>
+      <button id="botonPreparar">Preparar el convertidor</button>
+    </p>
+  </section>
+
+  <section class="tarjeta">
+    <div id="zona" tabindex="0" role="button" aria-label="Elegir archivos">
+      <b>Elige o arrastra tus archivos</b>
+      <span>.docx .doc .xlsx .xls .pptx .ppt .odt .ods .odp .rtf .txt .csv</span>
+    </div>
+    <input type="file" id="archivos" multiple hidden
+           accept=".docx,.doc,.xlsx,.xls,.pptx,.ppt,.odt,.ods,.odp,.rtf,.txt,.csv,.ppsx,.pps">
+  </section>
+
+  <section class="tarjeta" id="resultados" hidden>
+    <ul id="lista"></ul>
+  </section>
+
+  <p class="pie">Usa LibreOffice compilado para el navegador
+    (<a href="https://github.com/matbeedotcom/libreoffice-document-converter">libreoffice-document-converter</a>, licencia MPL-2.0).
+    La primera vez baja unos 77 MB; después funciona sin internet.</p>
+</main>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const CACHE_LO = "convertidor-lo-2.7.2";       // igual que en sw.js
+const base = new URL("./", location.href);
+const MB = (b) => (b / 1048576).toFixed(0);
+
+function estado(titulo, texto = "", avance = null) {
+  $("estadoTitulo").textContent = titulo;
+  $("estadoTexto").textContent = texto;
+  const barra = $("barra");
+  barra.hidden = avance === null;
+  barra.classList.toggle("indef", avance === "indef");
+  if (typeof avance === "number") barra.firstElementChild.style.width = Math.round(avance * 100) + "%";
+}
+
+// ---------------------------------------------------------------- 1. service worker y aislamiento
+async function asegurarAislamiento() {
+  if (!("serviceWorker" in navigator) || !("DecompressionStream" in window)) {
+    estado("Este navegador no sirve", "Ábrelo en Chrome, Edge, Brave, Firefox o Safari actualizados.");
+    return false;
+  }
+  const reg = await navigator.serviceWorker.register("sw.js");
+  await navigator.serviceWorker.ready;
+  if (crossOriginIsolated) { sessionStorage.removeItem("recargado"); return true; }
+  // La primera visita todavía no la controla el service worker: recargar una vez.
+  if (!sessionStorage.getItem("recargado")) {
+    sessionStorage.setItem("recargado", "1");
+    if (!navigator.serviceWorker.controller) {
+      await new Promise((ok) => {
+        navigator.serviceWorker.addEventListener("controllerchange", ok, { once: true });
+        setTimeout(ok, 3000);
+      });
+    }
+    location.reload();
+    return false;
+  }
+  estado("No se pudo activar el modo aislado",
+         "El navegador no dejó usar la memoria compartida que necesita LibreOffice. Prueba recargar o usar otro navegador.");
+  return false;
+}
+
+// ---------------------------------------------------------------- 2. bajar LibreOffice una vez
+async function faltantes() {
+  const cache = await caches.open(CACHE_LO);
+  const partes = await (await fetch("partes.json")).json();
+  const faltan = [];
+  for (const [nombre, info] of Object.entries(partes)) {
+    const r = await cache.match(new URL("lo/" + nombre, base).href);
+    if (!r || Number(r.headers.get("Content-Length")) !== info.tam) faltan.push([nombre, info]);
+  }
+  return faltan;
+}
+
+async function bajar(faltan) {
+  const cache = await caches.open(CACHE_LO);
+  const total = faltan.reduce((s, [, i]) => s + i.gz, 0);
+  let llevo = 0;
+  for (const [nombre, info] of faltan) {
+    let i = 0, lector = null;
+    const comprimido = new ReadableStream({
+      async pull(ctrl) {
+        for (;;) {
+          if (!lector) {
+            if (i >= info.partes.length) return ctrl.close();
+            const r = await fetch("lo/partes/" + info.partes[i++], { cache: "no-cache" });
+            if (!r.ok) throw new Error("no se pudo bajar " + info.partes[i - 1] + " (" + r.status + ")");
+            lector = r.body.getReader();
+          }
+          const { done, value } = await lector.read();
+          if (done) { lector = null; continue; }
+          llevo += value.byteLength;
+          estado("Bajando LibreOffice…", `${MB(llevo)} de ${MB(total)} MB. Solo la primera vez; después queda guardado.`, llevo / total);
+          return ctrl.enqueue(value);
+        }
+      },
+    });
+    const cuerpo = comprimido.pipeThrough(new DecompressionStream("gzip"));
+    await cache.put(new URL("lo/" + nombre, base).href, new Response(cuerpo, {
+      headers: { "Content-Type": info.tipo, "Content-Length": String(info.tam) },
+    }));
+  }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+}
+
+// ---------------------------------------------------------------- 3. arrancar LibreOffice
+let conversor = null, listo = null;
+
+function arrancar() {
+  if (listo) return listo;
+  listo = (async () => {
+    const t0 = performance.now();
+    estado("Arrancando LibreOffice…", "La primera vez en esta visita tarda entre uno y dos minutos (en celular, algo más).", "indef");
+    const { WorkerBrowserConverter, createWasmPaths } = await import("./lo/browser.js");
+    conversor = new WorkerBrowserConverter({
+      ...createWasmPaths(new URL("lo/", base).href),
+      browserWorkerJs: new URL("lo/browser.worker.global.js", base).href,
+      onProgress: (p) => {
+        if (p && typeof p.percent === "number" && p.percent > 0 && p.percent < 100)
+          estado("Arrancando LibreOffice…", p.message || "", p.percent / 100);
+      },
+    });
+    await conversor.initialize();
+    // Una conversión mínima carga de verdad LibreOffice; así el primer archivo del usuario ya no espera.
+    await conversor.convert(new TextEncoder().encode("ok"), { outputFormat: "pdf" }, "calentar.txt");
+    const s = ((performance.now() - t0) / 1000).toFixed(0);
+    estado("Listo", `LibreOffice arrancó en ${s} s. Elige tus archivos.`);
+  })();
+  listo.catch((e) => {
+    estado("No arrancó LibreOffice", String(e && e.message || e) + ". Recarga la página para intentar otra vez.");
+    listo = null;
+  });
+  return listo;
+}
+
+// ---------------------------------------------------------------- 4. convertir
+const cola = [];
+let trabajando = false;
+
+function agregar(archivos) {
+  $("resultados").hidden = false;
+  for (const f of archivos) {
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="nombre"><div></div><small>En espera…</small></div>`;
+    li.querySelector(".nombre div").textContent = f.name;
+    $("lista").prepend(li);
+    cola.push({ f, li });
+  }
+  procesar();
+}
+
+async function procesar() {
+  if (trabajando) return;
+  trabajando = true;
+  try {
+    while (cola.length) {
+      const { f, li } = cola.shift();
+      const nota = li.querySelector("small");
+      try {
+        if (!listo) {
+          nota.textContent = "Preparando LibreOffice…";
+          await preparar();
+        }
+        nota.textContent = "Esperando a que LibreOffice esté listo…";
+        await listo;
+        nota.textContent = "Convirtiendo…";
+        const t = performance.now();
+        const r = await conversor.convert(new Uint8Array(await f.arrayBuffer()), { outputFormat: "pdf" }, f.name);
+        const blob = new Blob([r.data], { type: "application/pdf" });
+        const nombre = f.name.replace(/\.[^.]+$/, "") + ".pdf";
+        nota.textContent = `PDF de ${(blob.size / 1024).toFixed(0)} KB en ${((performance.now() - t) / 1000).toFixed(1)} s`;
+        const a = document.createElement("a");
+        a.className = "bajar"; a.href = URL.createObjectURL(blob); a.download = nombre; a.textContent = "Descargar";
+        li.append(a);
+      } catch (e) {
+        nota.textContent = "No se pudo convertir: " + (e && e.message || e);
+        nota.classList.add("error");
+      }
+    }
+  } finally {
+    trabajando = false;
+  }
+}
+
+// ---------------------------------------------------------------- arranque de la página
+async function preparar() {
+  const faltan = await faltantes();
+  if (faltan.length) {
+    $("preparar").hidden = true;
+    try { await bajar(faltan); }
+    catch (e) {
+      estado("Se cortó la descarga", String(e.message || e) + ". Revisa tu internet y vuelve a intentar.");
+      $("preparar").hidden = false;
+      throw e;
+    }
+  }
+  return arrancar();
+}
+
+(async () => {
+  if (!(await asegurarAislamiento())) return;
+  const faltan = await faltantes();
+  if (faltan.length) {
+    const mb = MB(faltan.reduce((s, [, i]) => s + i.gz, 0));
+    estado("Falta preparar el convertidor", `La primera vez hay que bajar LibreOffice (unos ${mb} MB, conviene con Wi-Fi). Después funciona sin internet.`);
+    $("preparar").hidden = false;
+  } else {
+    arrancar();
+  }
+})();
+
+$("botonPreparar").onclick = () => preparar().catch(() => {});
+$("zona").onclick = () => $("archivos").click();
+$("zona").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("archivos").click(); } };
+$("archivos").onchange = (e) => { agregar([...e.target.files]); e.target.value = ""; };
+for (const ev of ["dragenter", "dragover"]) $("zona").addEventListener(ev, (e) => { e.preventDefault(); $("zona").classList.add("encima"); });
+for (const ev of ["dragleave", "drop"]) $("zona").addEventListener(ev, (e) => { e.preventDefault(); $("zona").classList.remove("encima"); });
+$("zona").addEventListener("drop", (e) => agregar([...e.dataTransfer.files]));
+</script>
+</body>
+</html>

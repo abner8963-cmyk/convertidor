@@ -1,0 +1,19 @@
+{
+ "soffice.wasm": {
+  "tipo": "application/wasm",
+  "tam": 147416331,
+  "gz": 48600053,
+  "partes": [
+   "soffice.wasm.gz.00",
+   "soffice.wasm.gz.01"
+  ]
+ },
+ "soffice.data": {
+  "tipo": "application/octet-stream",
+  "tam": 99735918,
+  "gz": 28465712,
+  "partes": [
+   "soffice.data.gz.00"
+  ]
+ }
+}
