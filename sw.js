@@ -7,7 +7,7 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "2";
+const VERSION = "3";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice
 const APP = ["./", "index.html", "manifest.webmanifest", "icono.svg", "partes.json",
@@ -75,18 +75,29 @@ async function deLibreOffice(peticion, nombre) {
 }
 
 async function deLaApp(peticion) {
-  // Primero la red (para recibir las actualizaciones); sin internet, lo guardado.
-  try {
-    const resp = await fetch(peticion);
+  // Primero la red (para recibir las actualizaciones), pero sin esperarla más de 3 s si ya
+  // hay copia guardada: en redes que no llegan a GitHub Pages (algunas de datos móviles)
+  // la conexión se queda colgada en vez de fallar, y la app tardaría en abrir.
+  const guardada = caches.match(peticion, { ignoreSearch: true })
+    .then((r) => r || (peticion.mode === "navigate" ? caches.match("index.html") : null));
+  const red = fetch(peticion).then((resp) => {
     if (resp.ok && peticion.method === "GET") {
       const copia = resp.clone();
       caches.open(CACHE_APP).then((c) => c.put(peticion, copia));
     }
-    return conCabeceras(resp);
+    return resp;
+  });
+  red.catch(() => {});                       // si gana el plazo y luego la red falla, no es error
+  const plazo = new Promise((ok) => setTimeout(ok, 3000, "plazo"));
+  try {
+    const primero = await Promise.race([red, plazo]);
+    if (primero !== "plazo") return conCabeceras(primero);
+    const copia = await guardada;
+    if (copia) return conCabeceras(copia);
+    return conCabeceras(await red);           // sin copia: no queda más que esperar a la red
   } catch (err) {
-    const guardada = await caches.match(peticion, { ignoreSearch: true })
-      || (peticion.mode === "navigate" ? await caches.match("index.html") : null);
-    if (guardada) return conCabeceras(guardada);
+    const copia = await guardada;
+    if (copia) return conCabeceras(copia);
     throw err;
   }
 }
