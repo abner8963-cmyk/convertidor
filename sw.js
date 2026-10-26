@@ -7,7 +7,7 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "1";
+const VERSION = "2";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice
 const APP = ["./", "index.html", "manifest.webmanifest", "icono.svg", "partes.json",

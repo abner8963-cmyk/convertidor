@@ -88,7 +88,7 @@
 const $ = (id) => document.getElementById(id);
 const CACHE_LO = "convertidor-lo-2.7.2";       // igual que en sw.js
 const base = new URL("./", location.href);
-const MB = (b) => (b / 1048576).toFixed(0);
+const MB = (b) => (b / 1e6).toFixed(0);
 
 function estado(titulo, texto = "", avance = null) {
   $("estadoTitulo").textContent = titulo;
@@ -169,7 +169,8 @@ async function bajar(faltan) {
 }
 
 // ---------------------------------------------------------------- 3. arrancar LibreOffice
-let conversor = null, listo = null;
+let conversor = null, listo = null, preparado = false;
+let notaActual = null;          // el renglón del archivo que se está convirtiendo
 
 function arrancar() {
   if (listo) return listo;
@@ -181,13 +182,16 @@ function arrancar() {
       ...createWasmPaths(new URL("lo/", base).href),
       browserWorkerJs: new URL("lo/browser.worker.global.js", base).href,
       onProgress: (p) => {
-        if (p && typeof p.percent === "number" && p.percent > 0 && p.percent < 100)
-          estado("Arrancando LibreOffice…", p.message || "", p.percent / 100);
+        if (!p || typeof p.percent !== "number" || p.percent <= 0 || p.percent >= 100) return;
+        // Ya arrancado, el avance es de una conversión: va en el renglón de su archivo.
+        if (preparado) { if (notaActual) notaActual.textContent = `Convirtiendo… ${Math.round(p.percent)} %`; }
+        else estado("Arrancando LibreOffice…", p.message || "", p.percent / 100);
       },
     });
     await conversor.initialize();
     // Una conversión mínima carga de verdad LibreOffice; así el primer archivo del usuario ya no espera.
     await conversor.convert(new TextEncoder().encode("ok"), { outputFormat: "pdf" }, "calentar.txt");
+    preparado = true;
     const s = ((performance.now() - t0) / 1000).toFixed(0);
     estado("Listo", `LibreOffice arrancó en ${s} s. Elige tus archivos.`);
   })();
@@ -229,6 +233,7 @@ async function procesar() {
         nota.textContent = "Esperando a que LibreOffice esté listo…";
         await listo;
         nota.textContent = "Convirtiendo…";
+        notaActual = nota;
         const t = performance.now();
         const r = await conversor.convert(new Uint8Array(await f.arrayBuffer()), { outputFormat: "pdf" }, f.name);
         const blob = new Blob([r.data], { type: "application/pdf" });
@@ -237,7 +242,9 @@ async function procesar() {
         const a = document.createElement("a");
         a.className = "bajar"; a.href = URL.createObjectURL(blob); a.download = nombre; a.textContent = "Descargar";
         li.append(a);
+        notaActual = null;
       } catch (e) {
+        notaActual = null;
         nota.textContent = "No se pudo convertir: " + (e && e.message || e);
         nota.classList.add("error");
       }
