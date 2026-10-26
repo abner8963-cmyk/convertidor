@@ -5,7 +5,8 @@
   "gz": 48600053,
   "partes": [
    "soffice.wasm.gz.00",
-   "soffice.wasm.gz.01"
+   "soffice.wasm.gz.01",
+   "soffice.wasm.gz.02"
   ]
  },
  "soffice.data": {
@@ -13,7 +14,8 @@
   "tam": 99735918,
   "gz": 28465712,
   "partes": [
-   "soffice.data.gz.00"
+   "soffice.data.gz.00",
+   "soffice.data.gz.01"
   ]
  }
 }
