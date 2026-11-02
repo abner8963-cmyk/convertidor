@@ -171,16 +171,19 @@ async function bajar(faltan) {
 // ---------------------------------------------------------------- 3. arrancar LibreOffice
 let conversor = null, listo = null, preparado = false;
 let notaActual = null;          // el renglón del archivo que se está convirtiendo
+const fuentes = [];             // fuentes sacadas de los archivos (se le pasan a LibreOffice al arrancar)
+const fuentesVistas = new Set();
 
-function arrancar() {
+function arrancar(aviso = "La primera vez en esta visita tarda entre uno y dos minutos (en celular, algo más).") {
   if (listo) return listo;
   listo = (async () => {
     const t0 = performance.now();
-    estado("Arrancando LibreOffice…", "La primera vez en esta visita tarda entre uno y dos minutos (en celular, algo más).", "indef");
+    estado("Arrancando LibreOffice…", aviso, "indef");
     const { WorkerBrowserConverter, createWasmPaths } = await import("./lo/browser.js");
     conversor = new WorkerBrowserConverter({
       ...createWasmPaths(new URL("lo/", base).href),
       browserWorkerJs: new URL("lo/browser.worker.global.js", base).href,
+      fonts: fuentes.map((f) => ({ filename: f.nombre, data: f.datos.slice() })),
       onProgress: (p) => {
         if (!p || typeof p.percent !== "number" || p.percent <= 0 || p.percent >= 100) return;
         // Ya arrancado, el avance es de una conversión: va en el renglón de su archivo.
@@ -200,6 +203,75 @@ function arrancar() {
     listo = null;
   });
   return listo;
+}
+
+// LibreOffice solo conoce las fuentes que tiene al arrancar: para usar las de un archivo hay que
+// apagarlo y volverlo a arrancar con ellas (ya bajado, tarda unos segundos).
+async function reiniciar() {
+  try { await listo; } catch {}
+  preparado = false;
+  try { await conversor?.destroy(); } catch {}
+  conversor = null; listo = null;
+  return arrancar("Cargando las fuentes que trae el archivo…");
+}
+
+// ---------------------------------------------------------------- 3b. fuentes incrustadas
+// PowerPoint (y Canva al exportar) guarda las fuentes dentro del .pptx en ppt/fonts/*.fntdata,
+// en formato EOT. El LibreOffice de escritorio las lee; el del navegador no, y cambia la letra
+// por otra más ancha (los textos se salen de sus cuadros). Aquí se sacan como .ttf normales.
+async function archivosDelZip(bytes, quiero) {
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let fin = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65558); i--) {
+    if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; }
+  }
+  if (fin < 0) return [];
+  const total = v.getUint16(fin + 10, true);
+  let p = v.getUint32(fin + 16, true);
+  const salida = [];
+  for (let k = 0; k < total && v.getUint32(p, true) === 0x02014b50; k++) {
+    const metodo = v.getUint16(p + 10, true), tam = v.getUint32(p + 20, true);
+    const largoNombre = v.getUint16(p + 28, true), extra = v.getUint16(p + 30, true), coment = v.getUint16(p + 32, true);
+    const local = v.getUint32(p + 42, true);
+    const nombre = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + largoNombre));
+    p += 46 + largoNombre + extra + coment;
+    if (!quiero(nombre) || (metodo !== 0 && metodo !== 8)) continue;
+    const ini = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+    const crudo = bytes.subarray(ini, ini + tam);
+    const datos = metodo === 0 ? crudo.slice() : new Uint8Array(await new Response(
+      new Blob([crudo]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+    salida.push({ nombre, datos });
+  }
+  return salida;
+}
+
+function eotATtf(b) {
+  if (b.length < 16) return null;
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const tamEot = v.getUint32(0, true), tamFuente = v.getUint32(4, true), banderas = v.getUint32(12, true);
+  if (banderas & 0x4 || tamEot > b.length || tamFuente > tamEot) return null;   // comprimida (MTX): no se puede
+  const ttf = b.slice(tamEot - tamFuente, tamEot);
+  if (banderas & 0x10000000) for (let i = 0; i < ttf.length; i++) ttf[i] ^= 0x50;
+  const firma = new DataView(ttf.buffer).getUint32(0);
+  return firma === 0x00010000 || firma === 0x4f54544f || firma === 0x74727565 ? ttf : null;   // TrueType / OTTO / true
+}
+
+async function fuentesNuevas(bytes, nombreArchivo) {
+  if (!/\.(pptx|ppsx|potx|pptm)$/i.test(nombreArchivo)) return 0;
+  let n = 0;
+  try {
+    for (const { datos } of await archivosDelZip(bytes, (x) => /^ppt\/fonts\/.+\.fntdata$/i.test(x))) {
+      const ttf = eotATtf(datos);
+      if (!ttf) continue;
+      const huella = [...new Uint8Array(await crypto.subtle.digest("SHA-256", ttf))]
+        .slice(0, 8).map((x) => x.toString(16).padStart(2, "0")).join("");
+      if (fuentesVistas.has(huella)) continue;
+      fuentesVistas.add(huella);
+      fuentes.push({ nombre: `incrustada-${huella}.ttf`, datos: ttf });
+      n++;
+    }
+  } catch (e) { console.warn("No se pudieron leer las fuentes del archivo", e); }
+  return n;
 }
 
 // ---------------------------------------------------------------- 4. convertir
@@ -232,10 +304,15 @@ async function procesar() {
         }
         nota.textContent = "Esperando a que LibreOffice esté listo…";
         await listo;
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        const t = performance.now();
+        if (await fuentesNuevas(bytes, f.name)) {
+          nota.textContent = "Cargando las fuentes que trae el archivo…";
+          await reiniciar();
+        }
         nota.textContent = "Convirtiendo…";
         notaActual = nota;
-        const t = performance.now();
-        const r = await conversor.convert(new Uint8Array(await f.arrayBuffer()), { outputFormat: "pdf" }, f.name);
+        const r = await conversor.convert(bytes, { outputFormat: "pdf" }, f.name);
         const blob = new Blob([r.data], { type: "application/pdf" });
         const nombre = f.name.replace(/\.[^.]+$/, "") + ".pdf";
         nota.textContent = `PDF de ${(blob.size / 1024).toFixed(0)} KB en ${((performance.now() - t) / 1000).toFixed(1)} s`;
