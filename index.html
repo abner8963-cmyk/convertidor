@@ -210,7 +210,10 @@ function arrancar(aviso = "La primera vez en esta visita tarda entre uno y dos m
 async function reiniciar() {
   try { await listo; } catch {}
   preparado = false;
-  try { await conversor?.destroy(); } catch {}
+  // destroy() espera respuesta del worker y a veces nunca llega: máximo 3 s y luego se mata el worker.
+  const viejo = conversor;
+  try { await Promise.race([viejo?.destroy(), new Promise((ok) => setTimeout(ok, 3000))]); } catch {}
+  try { viejo?.worker?.terminate(); } catch {}
   conversor = null; listo = null;
   return arrancar("Cargando las fuentes que trae el archivo…");
 }
