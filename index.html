@@ -277,6 +277,85 @@ async function fuentesNuevas(bytes, nombreArchivo) {
   return n;
 }
 
+// ---------------------------------------------------------------- 3c. efectos difuminados
+// El LibreOffice del navegador se queda trabado para siempre («Convirtiendo… 70 %») al dibujar
+// efectos con difuminado: sombras con blurRad (PowerPoint, Canva, PptxGenJS) y resplandor (glow).
+// El de escritorio no. Las sombras se dejan, pero con borde nítido (blurRad="0"), y el resplandor
+// se quita; así convierte en un par de segundos. El borde suave (softEdge) sí funciona: no se toca.
+// Probado 2026-11-08 con independencia.pptx (sombras) y «03 renovación y revocación de fiel» (glow).
+const OOXML = /\.(pptx|ppsx|potx|pptm|docx|docm|dotx|xlsx|xlsm|xltx)$/i;
+const CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(b) { let c = 0xffffffff; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+
+async function sinDifuminado(bytes, nombreArchivo) {
+  if (!OOXML.test(nombreArchivo)) return null;
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let fin = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65558); i--) {
+    if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; }
+  }
+  if (fin < 0) return null;
+  const total = v.getUint16(fin + 10, true);
+  let p = v.getUint32(fin + 16, true);
+  const entradas = [];
+  let cambios = 0;
+  for (let k = 0; k < total; k++) {
+    if (v.getUint32(p, true) !== 0x02014b50) return null;
+    const e = {
+      hecho: v.getUint16(p + 4, true), necesita: v.getUint16(p + 6, true), banderas: v.getUint16(p + 8, true) & ~0x0008,
+      metodo: v.getUint16(p + 10, true), hora: v.getUint16(p + 12, true), fecha: v.getUint16(p + 14, true),
+      crc: v.getUint32(p + 16, true), comp: v.getUint32(p + 20, true), tam: v.getUint32(p + 24, true),
+      interno: v.getUint16(p + 36, true), externo: v.getUint32(p + 38, true),
+    };
+    const largoNombre = v.getUint16(p + 28, true);
+    e.nombreBytes = bytes.subarray(p + 46, p + 46 + largoNombre);
+    const nombre = new TextDecoder().decode(e.nombreBytes);
+    const local = v.getUint32(p + 42, true);
+    const ini = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+    e.datos = bytes.subarray(ini, ini + e.comp);
+    p += 46 + largoNombre + v.getUint16(p + 30, true) + v.getUint16(p + 32, true);
+    if (/^(ppt|word|xl)\/.+\.xml$/i.test(nombre) && (e.metodo === 0 || e.metodo === 8)) {
+      const crudo = e.metodo === 0 ? e.datos : new Uint8Array(await new Response(
+        new Blob([e.datos]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+      const xml = new TextDecoder().decode(crudo);
+      if (/blurRad="[1-9]|<a:glow\b/.test(xml)) {
+        const nuevo = new TextEncoder().encode(xml.replace(/blurRad="\d+"/g, 'blurRad="0"')
+          .replace(/<a:glow\b[^>]*\/>|<a:glow\b[\s\S]*?<\/a:glow>/g, ""));
+        Object.assign(e, { metodo: 0, datos: nuevo, crc: crc32(nuevo), comp: nuevo.length, tam: nuevo.length });
+        cambios++;
+      }
+    }
+    entradas.push(e);
+  }
+  if (!cambios) return null;
+  // zip nuevo: lo que no cambió se copia tal cual (ya comprimido); lo cambiado va sin comprimir
+  const largo = entradas.reduce((n, e) => n + 30 + e.nombreBytes.length + e.comp + 46 + e.nombreBytes.length, 22);
+  const out = new Uint8Array(largo), w = new DataView(out.buffer);
+  let q = 0;
+  const cabecera = (e, central) => {
+    w.setUint32(q, central ? 0x02014b50 : 0x04034b50, true); q += 4;
+    if (central) { w.setUint16(q, e.hecho, true); q += 2; }
+    for (const x of [e.necesita, e.banderas, e.metodo, e.hora, e.fecha]) { w.setUint16(q, x, true); q += 2; }
+    for (const x of [e.crc, e.comp, e.tam]) { w.setUint32(q, x, true); q += 4; }
+    w.setUint16(q, e.nombreBytes.length, true); w.setUint16(q + 2, 0, true); q += 4;
+    if (central) {
+      for (const x of [0, 0, e.interno]) { w.setUint16(q, x, true); q += 2; }
+      w.setUint32(q, e.externo, true); w.setUint32(q + 4, e.local, true); q += 8;
+    }
+    out.set(e.nombreBytes, q); q += e.nombreBytes.length;
+  };
+  for (const e of entradas) { e.local = q; cabecera(e, false); out.set(e.datos, q); q += e.datos.length; }
+  const inicioCentral = q;
+  for (const e of entradas) cabecera(e, true);
+  w.setUint32(q, 0x06054b50, true); w.setUint16(q + 8, entradas.length, true); w.setUint16(q + 10, entradas.length, true);
+  w.setUint32(q + 12, q - inicioCentral, true); w.setUint32(q + 16, inicioCentral, true);
+  return { bytes: out, cambios };
+}
+
 // ---------------------------------------------------------------- 4. convertir
 const cola = [];
 let trabajando = false;
@@ -313,12 +392,17 @@ async function procesar() {
           nota.textContent = "Cargando las fuentes que trae el archivo…";
           await reiniciar();
         }
+        let entrada = bytes, aviso = "";
+        try {
+          const limpio = await sinDifuminado(bytes, f.name);
+          if (limpio) { entrada = limpio.bytes; aviso = " · sombras y brillos simplificados"; }
+        } catch (e) { console.warn("No se pudieron revisar los efectos del archivo", e); }
         nota.textContent = "Convirtiendo…";
         notaActual = nota;
-        const r = await conversor.convert(bytes, { outputFormat: "pdf" }, f.name);
+        const r = await conversor.convert(entrada, { outputFormat: "pdf" }, f.name);
         const blob = new Blob([r.data], { type: "application/pdf" });
         const nombre = f.name.replace(/\.[^.]+$/, "") + ".pdf";
-        nota.textContent = `PDF de ${(blob.size / 1024).toFixed(0)} KB en ${((performance.now() - t) / 1000).toFixed(1)} s`;
+        nota.textContent = `PDF de ${(blob.size / 1024).toFixed(0)} KB en ${((performance.now() - t) / 1000).toFixed(1)} s${aviso}`;
         const a = document.createElement("a");
         a.className = "bajar"; a.href = URL.createObjectURL(blob); a.download = nombre; a.textContent = "Descargar";
         li.append(a);
