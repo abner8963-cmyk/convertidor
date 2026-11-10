@@ -62,7 +62,7 @@
   ul.paginas li { border: 1px solid var(--borde); border-radius: 12px; padding: 8px; background: var(--fondo); display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: grab; }
   ul.paginas li.destino { border-color: var(--acento); background: var(--acento-claro); }
   .hoja { width: 112px; height: 112px; display: flex; align-items: center; justify-content: center; }
-  .hoja canvas { max-width: 100%; max-height: 100%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: transform .2s; }
+  .hoja canvas, .hoja img { max-width: 100%; max-height: 100%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: transform .2s; }
   .num { font-size: 13px; color: var(--suave); font-weight: 600; }
   .botones { display: flex; gap: 4px; }
   .botones button { padding: 0; width: 28px; height: 32px; border-radius: 8px; background: var(--acento-claro); color: var(--acento); font-size: 15px; }
@@ -78,7 +78,8 @@
   .aviso { color: var(--suave); font-size: 14px; margin: 0; }
   .aviso.error { color: var(--error); }
   label.campo { display: block; font-weight: 600; margin-top: 14px; }
-  label.campo input[type=text] { display: block; width: 100%; margin-top: 6px; font: inherit; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); }
+  label.campo input[type=text], label.campo select { display: block; width: 100%; margin-top: 6px; font: inherit; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); }
+  .opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 12px; }
   fieldset.modo { border: 0; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 6px; }
   fieldset.modo legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
   [hidden] { display: none !important; }
@@ -95,6 +96,8 @@
       <li><a href="#unir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="11" rx="1.5"/><rect x="13" y="9" width="8" height="11" rx="1.5"/><path d="M11 9.5h2"/></svg><b>Unir PDF</b><span>Varios archivos en uno solo</span></a></li>
       <li><a href="#dividir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M4 14h3M10 14h4M17 14h3" stroke-dasharray="0"/></svg><b>Dividir PDF</b><span>Sacar páginas o rangos</span></a></li>
       <li><a href="#organizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1.3"/><rect x="14" y="3" width="7" height="8" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><path d="M15 16.5a3 3 0 1 1 1 3.4M15 20v-2.6h2.6"/></svg><b>Organizar páginas</b><span>Girar, quitar y reordenar</span></a></li>
+      <li><a href="#imagenes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 18l5-5 3.5 3.5L16 13l5 5"/></svg><b>Imágenes a PDF</b><span>Fotos, capturas y escaneos</span></a></li>
+      <li><a href="#aimagenes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h6l4 4v5H6z"/><path d="M12 3v4h4"/><rect x="8" y="14" width="13" height="7" rx="1.5"/><path d="M9 20l3.5-3 2.5 2 2-1.5 3 2.5"/></svg><b>PDF a imágenes</b><span>Cada página en JPG o PNG</span></a></li>
     </ul>
   </div>
 
@@ -191,6 +194,86 @@
         <button id="limpiarOrg" class="secundario" hidden>Empezar de nuevo</button>
       </div>
       <ul class="filas" id="salidaOrg"></ul>
+    </section>
+  </div>
+
+  <div id="vista-imagenes" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Imágenes a PDF</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaImg" tabindex="0" role="button" aria-label="Elegir las imágenes">
+        <b>Elige o arrastra tus imágenes</b>
+        <span>JPG, PNG o WebP. Cada imagen será una página, en el orden que dejes.</span>
+      </div>
+      <input type="file" id="archivosImg" multiple hidden accept="image/*">
+      <p class="aviso" id="avisoImg" aria-live="polite" style="margin-top:12px"></p>
+      <ul class="paginas" id="listaImg"></ul>
+      <div class="opciones">
+        <label class="campo">Tamaño de la hoja
+          <select id="hojaImg">
+            <option value="carta">Carta</option>
+            <option value="a4">A4</option>
+            <option value="oficio">Oficio</option>
+            <option value="imagen">Del tamaño de la imagen</option>
+          </select>
+        </label>
+        <label class="campo">Orientación
+          <select id="orientaImg">
+            <option value="auto">Según cada imagen</option>
+            <option value="vertical">Vertical</option>
+            <option value="horizontal">Horizontal</option>
+          </select>
+        </label>
+        <label class="campo">Margen
+          <select id="margenImg">
+            <option value="0">Sin margen</option>
+            <option value="18" selected>Pequeño</option>
+            <option value="54">Grande</option>
+          </select>
+        </label>
+      </div>
+      <div class="acciones">
+        <button id="crearImg" disabled>Crear PDF</button>
+        <button id="limpiarImg" class="secundario" hidden>Empezar de nuevo</button>
+      </div>
+      <ul class="filas" id="salidaImg"></ul>
+    </section>
+  </div>
+
+  <div id="vista-aimagenes" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>PDF a imágenes</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaAImg" tabindex="0" role="button" aria-label="Elegir el PDF">
+        <b>Elige o arrastra un PDF</b>
+        <span id="infoAImg">Cada página se guarda como una imagen.</span>
+      </div>
+      <input type="file" id="archivoAImg" hidden accept=".pdf,application/pdf">
+      <div id="opcionesAImg" hidden>
+        <div class="opciones">
+          <label class="campo">Formato
+            <select id="formatoAImg">
+              <option value="jpg">JPG (pesa menos)</option>
+              <option value="png">PNG (más nítido)</option>
+            </select>
+          </label>
+          <label class="campo">Calidad
+            <select id="calidadAImg">
+              <option value="100">Para pantalla</option>
+              <option value="150" selected>Normal</option>
+              <option value="300">Alta, para imprimir</option>
+            </select>
+          </label>
+          <label class="campo">Páginas
+            <input type="text" id="paginasAImg" autocomplete="off" placeholder="Todas">
+          </label>
+        </div>
+        <div class="acciones">
+          <button id="botonAImg">Convertir</button>
+          <p class="aviso" id="avisoAImg" aria-live="polite"></p>
+        </div>
+      </div>
+      <ul class="filas" id="salidaAImg"></ul>
     </section>
   </div>
 
@@ -566,7 +649,7 @@ async function iniciarOffice() {
 }
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["inicio", "office", "unir", "dividir", "organizar"];
+const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes"];
 function verVista() {
   let nombre = location.hash.slice(1) || "inicio";
   if (!VISTAS.includes(nombre)) nombre = "inicio";
@@ -607,13 +690,13 @@ async function abrirPdf(f) {
     throw new Error(`«${f.name}» no se pudo leer como PDF.`);
   }
 }
-function filaDescarga(lista, bytes, nombre, detalle) {
+function filaDescarga(lista, bytes, nombre, detalle, tipo = "application/pdf") {
   const li = document.createElement("li");
   li.innerHTML = `<div class="nombre"><div></div><small></small></div><a class="bajar">Descargar</a>`;
   li.querySelector(".nombre div").textContent = nombre;
   li.querySelector("small").textContent = `${detalle} · ${(bytes.length / 1024).toFixed(0)} KB`;
   const a = li.querySelector("a");
-  a.href = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  a.href = URL.createObjectURL(new Blob([bytes], { type: tipo }));
   a.download = nombre;
   lista.prepend(li);
 }
@@ -862,6 +945,208 @@ $("guardarOrg").onclick = async () => {
     aviso("avisoOrg", String(e && e.message || e), true);
   } finally {
     $("guardarOrg").disabled = !hojas.length;
+  }
+};
+
+// ---------------------------------------------------------------- 9. imágenes a PDF
+const fotos = [];            // { f, url, giro, li }
+// La orientación que la cámara anota en el JPG (1 = normal). pdf-lib no la aplica, así que
+// solo se mete el JPG tal cual cuando no hay que girarlo; si no, se redibuja.
+function orientacionJpeg(b) {
+  if (b[0] !== 0xff || b[1] !== 0xd8) return 1;
+  let p = 2;
+  while (p + 4 < b.length && b[p] === 0xff) {
+    const marca = b[p + 1], largo = (b[p + 2] << 8) | b[p + 3];
+    if (marca === 0xda) return 1;
+    if (marca === 0xe1 && b[p + 4] === 0x45 && b[p + 5] === 0x78 && b[p + 6] === 0x69 && b[p + 7] === 0x66) {
+      const t = p + 10, le = b[t] === 0x49;
+      const u16 = (o) => le ? b[o] | (b[o + 1] << 8) : (b[o] << 8) | b[o + 1];
+      const u32 = (o) => (le ? b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24) : (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+      const ifd = t + u32(t + 4), n = u16(ifd);
+      for (let i = 0; i < n; i++) if (u16(ifd + 2 + i * 12) === 0x0112) return u16(ifd + 2 + i * 12 + 8);
+      return 1;
+    }
+    p += 2 + largo;
+  }
+  return 1;
+}
+function acomodarImg() {
+  const ul = $("listaImg");
+  fotos.forEach((x, k) => {
+    if (ul.children[k] !== x.li) ul.insertBefore(x.li, ul.children[k] || null);
+    x.li.querySelector(".num").textContent = k + 1;
+    x.li.querySelector("img").style.transform = x.giro ? `rotate(${x.giro}deg)` : "";
+    x.li.querySelector('[data-a="izq"]').disabled = k === 0;
+    x.li.querySelector('[data-a="der"]').disabled = k === fotos.length - 1;
+  });
+  $("crearImg").disabled = !fotos.length;
+  $("crearImg").textContent = fotos.length > 1 ? `Crear PDF de ${fotos.length} páginas` : "Crear PDF";
+  $("limpiarImg").hidden = !fotos.length;
+}
+function crearFoto(f) {
+  const x = { f, url: URL.createObjectURL(f), giro: 0 };
+  const li = x.li = document.createElement("li");
+  li.innerHTML = `<div class="hoja"><img alt=""></div><div class="num"></div>
+    <div class="botones"><button data-a="izq" aria-label="Mover antes">←</button><button data-a="girar" aria-label="Girar">↻</button><button data-a="quitar" aria-label="Quitar">✕</button><button data-a="der" aria-label="Mover después">→</button></div>`;
+  li.style.cursor = "default";
+  li.title = f.name;
+  li.querySelector("img").src = x.url;
+  li.onclick = (e) => {
+    const a = e.target.closest("button")?.dataset.a, k = fotos.indexOf(x);
+    if (a === "izq" && k > 0) fotos.splice(k - 1, 0, fotos.splice(k, 1)[0]);
+    else if (a === "der" && k < fotos.length - 1) fotos.splice(k + 1, 0, fotos.splice(k, 1)[0]);
+    else if (a === "girar") x.giro = (x.giro + 90) % 360;
+    else if (a === "quitar") { fotos.splice(k, 1); li.remove(); URL.revokeObjectURL(x.url); }
+    else return;
+    acomodarImg();
+  };
+  return x;
+}
+zonaDeArchivos($("zonaImg"), $("archivosImg"), (fs) => {
+  const buenas = fs.filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp)$/i.test(f.name));
+  for (const f of buenas) fotos.push(crearFoto(f));
+  acomodarImg();
+  aviso("avisoImg", buenas.length < fs.length ? "Solo se agregan imágenes." : "", buenas.length < fs.length);
+});
+$("limpiarImg").onclick = () => { for (const x of fotos) URL.revokeObjectURL(x.url); fotos.length = 0; $("listaImg").textContent = ""; acomodarImg(); aviso("avisoImg", ""); };
+
+// Devuelve la imagen ya metida en el PDF. JPG derecho: sus bytes tal cual (sin perder calidad).
+// Lo demás se redibuja: PNG sigue PNG; WebP y otros pasan a JPG de buena calidad.
+async function incrustar(doc, x) {
+  const bytes = new Uint8Array(await x.f.arrayBuffer());
+  const esJpg = bytes[0] === 0xff && bytes[1] === 0xd8;
+  const esPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+  if (esJpg && !x.giro && orientacionJpeg(bytes) === 1) {
+    try { return await doc.embedJpg(bytes); } catch { /* JPG raro: se redibuja abajo */ }
+  }
+  if (esPng && !x.giro) {
+    try { return await doc.embedPng(bytes); } catch { /* PNG raro: se redibuja abajo */ }
+  }
+  let mapa;
+  try { mapa = await createImageBitmap(x.f, { imageOrientation: "from-image" }); }
+  catch { throw new Error(`«${x.f.name}» no se pudo abrir como imagen.`); }
+  const deLado = x.giro === 90 || x.giro === 270;
+  const lienzo = document.createElement("canvas");
+  lienzo.width = deLado ? mapa.height : mapa.width;
+  lienzo.height = deLado ? mapa.width : mapa.height;
+  const c = lienzo.getContext("2d");
+  if (!esPng) { c.fillStyle = "#fff"; c.fillRect(0, 0, lienzo.width, lienzo.height); }
+  c.translate(lienzo.width / 2, lienzo.height / 2);
+  c.rotate(x.giro * Math.PI / 180);
+  c.drawImage(mapa, -mapa.width / 2, -mapa.height / 2);
+  mapa.close();
+  const blob = await new Promise((ok) => lienzo.toBlob(ok, esPng ? "image/png" : "image/jpeg", 0.92));
+  const nuevos = new Uint8Array(await blob.arrayBuffer());
+  return esPng ? doc.embedPng(nuevos) : doc.embedJpg(nuevos);
+}
+const HOJAS = { carta: [612, 792], a4: [595.28, 841.89], oficio: [612, 936] };
+$("crearImg").onclick = async () => {
+  $("crearImg").disabled = true;
+  try {
+    const { PDFDocument } = await pdfLib();
+    const doc = await PDFDocument.create();
+    const hoja = $("hojaImg").value, orienta = $("orientaImg").value, margen = Number($("margenImg").value);
+    for (const [k, x] of fotos.entries()) {
+      aviso("avisoImg", `Agregando ${k + 1} de ${fotos.length}…`);
+      const img = await incrustar(doc, x);
+      let ancho, alto;
+      if (hoja === "imagen") {
+        // 96 puntos por pulgada, pero sin pasar de una hoja de 20 pulgadas
+        const e = Math.min(0.75, 1440 / Math.max(img.width, img.height));
+        ancho = img.width * e + margen * 2; alto = img.height * e + margen * 2;
+      } else {
+        [ancho, alto] = HOJAS[hoja];
+        const horizontal = orienta === "horizontal" || (orienta === "auto" && img.width > img.height);
+        if (horizontal) [ancho, alto] = [alto, ancho];
+      }
+      const e = Math.min((ancho - margen * 2) / img.width, (alto - margen * 2) / img.height);
+      const w = img.width * e, h = img.height * e;
+      doc.addPage([ancho, alto]).drawImage(img, { x: (ancho - w) / 2, y: (alto - h) / 2, width: w, height: h });
+    }
+    const bytes = await doc.save();
+    filaDescarga($("salidaImg"), bytes, fotos[0].f.name.replace(/\.[^.]+$/, "") + ".pdf", paginasTxt(fotos.length));
+    aviso("avisoImg", "Listo.");
+  } catch (e) {
+    aviso("avisoImg", String(e && e.message || e), true);
+  } finally {
+    $("crearImg").disabled = !fotos.length;
+  }
+};
+
+// ---------------------------------------------------------------- 10. PDF a imágenes
+// Un .zip sin comprimir (las imágenes ya vienen comprimidas) para bajar todas de una vez
+function zipSimple(archivos) {
+  const cod = new TextEncoder();
+  const items = archivos.map((a) => ({ n: cod.encode(a.nombre), d: a.bytes, crc: crc32(a.bytes) }));
+  const out = new Uint8Array(items.reduce((t, it) => t + 76 + it.n.length * 2 + it.d.length, 22)), w = new DataView(out.buffer);
+  let q = 0;
+  const cabecera = (it, central) => {
+    w.setUint32(q, central ? 0x02014b50 : 0x04034b50, true); q += 4;
+    if (central) { w.setUint16(q, 20, true); q += 2; }
+    for (const v of [20, 0x0800, 0, 0, 0x21]) { w.setUint16(q, v, true); q += 2; }      // 0x0800: nombres en UTF-8
+    for (const v of [it.crc, it.d.length, it.d.length]) { w.setUint32(q, v, true); q += 4; }
+    w.setUint16(q, it.n.length, true); q += 4;
+    if (central) { q += 10; w.setUint32(q, it.local, true); q += 4; }
+    out.set(it.n, q); q += it.n.length;
+  };
+  for (const it of items) { it.local = q; cabecera(it, false); out.set(it.d, q); q += it.d.length; }
+  const inicio = q;
+  for (const it of items) cabecera(it, true);
+  w.setUint32(q, 0x06054b50, true); w.setUint16(q + 8, items.length, true); w.setUint16(q + 10, items.length, true);
+  w.setUint32(q + 12, q - inicio, true); w.setUint32(q + 16, inicio, true);
+  return out;
+}
+let paraImagenes = null;     // { f, vista, total }
+zonaDeArchivos($("zonaAImg"), $("archivoAImg"), async (fs) => {
+  const f = fs.find(esPdf);
+  if (!f) { $("infoAImg").textContent = "Ese archivo no es un PDF."; return; }
+  $("infoAImg").textContent = "Abriendo…";
+  try {
+    const pdfjs = await pdfJs();
+    const vista = await pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+    paraImagenes = { f, vista, total: vista.numPages };
+    $("infoAImg").textContent = `${f.name} · ${paginasTxt(vista.numPages)}`;
+    $("opcionesAImg").hidden = false;
+    aviso("avisoAImg", "");
+  } catch (e) {
+    paraImagenes = null;
+    $("opcionesAImg").hidden = true;
+    $("infoAImg").textContent = e && e.name === "PasswordException" ? `«${f.name}» tiene contraseña; quítasela antes.`
+      : /visor/.test(String(e && e.message)) ? e.message : `«${f.name}» no se pudo leer como PDF.`;
+  }
+});
+$("botonAImg").onclick = async () => {
+  if (!paraImagenes) return;
+  const { f, vista, total } = paraImagenes;
+  $("botonAImg").disabled = true;
+  try {
+    const paginas = [...new Set(leerRangos($("paginasAImg").value, total).flat())];
+    if (paginas.length > 300) throw new Error(`Son ${paginas.length} imágenes; elige menos páginas.`);
+    const png = $("formatoAImg").value === "png", ext = png ? "png" : "jpg";
+    const escala = Number($("calidadAImg").value) / 72;
+    const nombre = sinExt(f.name), cifras = String(total).length;
+    const hechas = [];
+    const lienzo = document.createElement("canvas");
+    for (const [k, i] of paginas.entries()) {
+      aviso("avisoAImg", `Página ${k + 1} de ${paginas.length}…`);
+      const pagina = await vista.getPage(i + 1);
+      let v = pagina.getViewport({ scale: escala });
+      const tope = Math.sqrt(24e6 / (v.width * v.height));      // máximo 24 megapíxeles por imagen
+      if (tope < 1) v = pagina.getViewport({ scale: escala * tope });
+      lienzo.width = Math.round(v.width); lienzo.height = Math.round(v.height);
+      const c = lienzo.getContext("2d");
+      c.fillStyle = "#fff"; c.fillRect(0, 0, lienzo.width, lienzo.height);
+      await pagina.render({ canvasContext: c, viewport: v }).promise;
+      const blob = await new Promise((ok) => lienzo.toBlob(ok, png ? "image/png" : "image/jpeg", 0.9));
+      hechas.push({ nombre: `${nombre} - página ${String(i + 1).padStart(cifras, "0")}.${ext}`, bytes: new Uint8Array(await blob.arrayBuffer()), px: `${lienzo.width} × ${lienzo.height} px` });
+    }
+    if (hechas.length <= 12) for (const h of [...hechas].reverse()) filaDescarga($("salidaAImg"), h.bytes, h.nombre, h.px, png ? "image/png" : "image/jpeg");
+    if (hechas.length > 1) filaDescarga($("salidaAImg"), zipSimple(hechas), `${nombre} (imágenes).zip`, `${hechas.length} imágenes ${ext.toUpperCase()}`, "application/zip");
+    aviso("avisoAImg", hechas.length === 1 ? "Listo." : `Listo: ${hechas.length} imágenes${hechas.length > 12 ? ", juntas en un .zip" : ""}.`);
+  } catch (e) {
+    aviso("avisoAImg", String(e && e.message || e), true);
+  } finally {
+    $("botonAImg").disabled = false;
   }
 };
 
