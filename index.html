@@ -49,9 +49,23 @@
   a.bajar { text-decoration: none; background: var(--acento); color: #fff; border-radius: 10px; padding: 8px 14px; font-weight: 600; white-space: nowrap; }
   .pie { color: var(--suave); font-size: 13px; text-align: center; margin-top: 24px; }
   .pie a { color: var(--acento); }
-  nav.herramientas { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
-  nav.herramientas button { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); font-weight: 600; min-height: 44px; }
-  nav.herramientas button[aria-selected="true"] { background: var(--acento); color: #fff; border-color: var(--acento); }
+  ul.portada { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  ul.portada a { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 16px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; color: var(--texto); text-decoration: none; transition: border-color .2s, background .2s; }
+  ul.portada a:hover, ul.portada a:focus-visible { border-color: var(--acento); background: var(--acento-claro); }
+  ul.portada svg { width: 30px; height: 30px; color: var(--acento); }
+  ul.portada b { font-size: 16px; }
+  ul.portada span { color: var(--suave); font-size: 13px; line-height: 1.35; }
+  .volver { margin: 0 0 8px; }
+  .volver a { color: var(--acento); text-decoration: none; font-weight: 600; display: inline-block; padding: 8px 0; }
+  h2 { font-size: 20px; margin: 0 0 12px; }
+  ul.paginas { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+  ul.paginas li { border: 1px solid var(--borde); border-radius: 12px; padding: 8px; background: var(--fondo); display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: grab; }
+  ul.paginas li.destino { border-color: var(--acento); background: var(--acento-claro); }
+  .hoja { width: 112px; height: 112px; display: flex; align-items: center; justify-content: center; }
+  .hoja canvas { max-width: 100%; max-height: 100%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: transform .2s; }
+  .num { font-size: 13px; color: var(--suave); font-weight: 600; }
+  .botones { display: flex; gap: 4px; }
+  .botones button { padding: 0; width: 28px; height: 32px; border-radius: 8px; background: var(--acento-claro); color: var(--acento); font-size: 15px; }
   .zona { border: 2px dashed var(--borde); border-radius: 14px; padding: 28px 16px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
   .zona.encima { border-color: var(--acento); background: var(--acento-claro); }
   .zona b { display: block; font-size: 18px; margin-bottom: 4px; }
@@ -75,13 +89,18 @@
   <h1><img src="icono.svg" alt="">Convertidor</h1>
   <p class="sub">Herramientas de PDF. Todo pasa en tu navegador: tus archivos no se suben a ningún lado.</p>
 
-  <nav class="herramientas" role="tablist" aria-label="Herramientas">
-    <button role="tab" data-vista="office" aria-selected="true">Office a PDF</button>
-    <button role="tab" data-vista="unir" aria-selected="false">Unir PDF</button>
-    <button role="tab" data-vista="dividir" aria-selected="false">Dividir PDF</button>
-  </nav>
+  <div id="vista-inicio">
+    <ul class="portada">
+      <li><a href="#office"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h4"/></svg><b>Office a PDF</b><span>Word, Excel y PowerPoint</span></a></li>
+      <li><a href="#unir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="11" rx="1.5"/><rect x="13" y="9" width="8" height="11" rx="1.5"/><path d="M11 9.5h2"/></svg><b>Unir PDF</b><span>Varios archivos en uno solo</span></a></li>
+      <li><a href="#dividir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M4 14h3M10 14h4M17 14h3" stroke-dasharray="0"/></svg><b>Dividir PDF</b><span>Sacar páginas o rangos</span></a></li>
+      <li><a href="#organizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1.3"/><rect x="14" y="3" width="7" height="8" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><path d="M15 16.5a3 3 0 1 1 1 3.4M15 20v-2.6h2.6"/></svg><b>Organizar páginas</b><span>Girar, quitar y reordenar</span></a></li>
+    </ul>
+  </div>
 
-  <div id="vista-office">
+  <div id="vista-office" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Office a PDF</h2>
 
   <section class="tarjeta" id="estado" aria-live="polite">
     <b id="estadoTitulo">Revisando…</b>
@@ -108,6 +127,8 @@
   </div>
 
   <div id="vista-unir" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Unir PDF</h2>
     <section class="tarjeta">
       <div class="zona" id="zonaUnir" tabindex="0" role="button" aria-label="Elegir los PDF que se van a unir">
         <b>Elige o arrastra los PDF</b>
@@ -125,6 +146,8 @@
   </div>
 
   <div id="vista-dividir" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Dividir PDF</h2>
     <section class="tarjeta">
       <div class="zona" id="zonaDividir" tabindex="0" role="button" aria-label="Elegir el PDF que se va a dividir">
         <b>Elige o arrastra un PDF</b>
@@ -151,10 +174,30 @@
     </section>
   </div>
 
+  <div id="vista-organizar" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Organizar páginas</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaOrg" tabindex="0" role="button" aria-label="Elegir los PDF que se van a organizar">
+        <b>Elige o arrastra uno o varios PDF</b>
+        <span>Verás cada página para girarla, quitarla o cambiarla de lugar.</span>
+      </div>
+      <input type="file" id="archivosOrg" multiple hidden accept=".pdf,application/pdf">
+      <p class="aviso" id="avisoOrg" aria-live="polite" style="margin-top:12px"></p>
+      <ul class="paginas" id="paginasOrg"></ul>
+      <div class="acciones">
+        <button id="guardarOrg" disabled>Guardar PDF</button>
+        <button id="girarTodasOrg" class="secundario" hidden>Girar todas</button>
+        <button id="limpiarOrg" class="secundario" hidden>Empezar de nuevo</button>
+      </div>
+      <ul class="filas" id="salidaOrg"></ul>
+    </section>
+  </div>
+
   <p class="pie">Usa LibreOffice compilado para el navegador
     (<a href="https://github.com/matbeedotcom/libreoffice-document-converter">libreoffice-document-converter</a>, licencia MPL-2.0).
     Para Office a PDF, la primera vez baja unos 77 MB; después funciona sin internet.
-    Unir y dividir usan <a href="https://pdf-lib.js.org/">pdf-lib</a> (licencia MIT) y no necesitan esa descarga.</p>
+    Las herramientas de PDF usan <a href="https://pdf-lib.js.org/">pdf-lib</a> (MIT) y <a href="https://mozilla.github.io/pdf.js/">PDF.js</a> (Apache-2.0) y no necesitan esa descarga.</p>
 </main>
 
 <script type="module">
@@ -506,8 +549,12 @@ async function preparar() {
   return arrancar();
 }
 
-(async () => {
-  if (!(await asegurarAislamiento())) return;
+const aislado = asegurarAislamiento();      // registra el service worker (también deja la app sin internet)
+let officeIniciado = false;
+async function iniciarOffice() {
+  if (officeIniciado) return;
+  officeIniciado = true;
+  if (!(await aislado)) return;
   const faltan = await faltantes();
   if (faltan.length) {
     const mb = MB(faltan.reduce((s, [, i]) => s + i.gz, 0));
@@ -516,18 +563,19 @@ async function preparar() {
   } else {
     arrancar();
   }
-})();
+}
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["office", "unir", "dividir"];
-function verVista(nombre) {
-  if (!VISTAS.includes(nombre)) nombre = "office";
+const VISTAS = ["inicio", "office", "unir", "dividir", "organizar"];
+function verVista() {
+  let nombre = location.hash.slice(1) || "inicio";
+  if (!VISTAS.includes(nombre)) nombre = "inicio";
   for (const v of VISTAS) $("vista-" + v).hidden = v !== nombre;
-  for (const b of document.querySelectorAll("nav.herramientas button")) b.setAttribute("aria-selected", String(b.dataset.vista === nombre));
-  try { localStorage.setItem("vista", nombre); } catch {}
+  if (nombre === "office") iniciarOffice();
+  scrollTo(0, 0);
 }
-for (const b of document.querySelectorAll("nav.herramientas button")) b.onclick = () => verVista(b.dataset.vista);
-try { verVista(localStorage.getItem("vista") || "office"); } catch { verVista("office"); }
+addEventListener("hashchange", verVista);
+verVista();
 
 function zonaDeArchivos(zona, entrada, alRecibir) {
   zona.onclick = () => entrada.click();
@@ -690,6 +738,130 @@ $("botonDividir").onclick = async () => {
     aviso("avisoDividir", String(e && e.message || e), true);
   } finally {
     $("botonDividir").disabled = false;
+  }
+};
+
+// ---------------------------------------------------------------- 8. organizar páginas
+// PDF.js dibuja las miniaturas; pdf-lib arma el PDF final con el orden y los giros elegidos.
+let _pdfjs = null;
+function pdfJs() {
+  return _pdfjs ||= import(new URL("lib/pdf.min.mjs", base).href).then((m) => {
+    m.GlobalWorkerOptions.workerSrc = new URL("lib/pdf.worker.min.mjs", base).href;
+    return m;
+  }).catch(() => { _pdfjs = null; throw new Error("No se pudo cargar el visor de páginas. Revisa tu internet."); });
+}
+const hojas = [];            // { fuente: {nombre, bytes, vista, lib}, i, giro, li }
+let arrastrada = null;
+let colaPintar = Promise.resolve();
+const alVerse = new IntersectionObserver((vistas) => {
+  for (const v of vistas) if (v.isIntersecting) { alVerse.unobserve(v.target); pintarHoja(v.target._hoja); }
+}, { rootMargin: "400px" });
+function pintarHoja(h) {       // una a la vez, para no trabar el celular
+  colaPintar = colaPintar.then(async () => {
+    if (!hojas.includes(h)) return;
+    const pagina = await h.fuente.vista.getPage(h.i + 1);
+    const base1 = pagina.getViewport({ scale: 1 });
+    const v = pagina.getViewport({ scale: 240 / Math.max(base1.width, base1.height) });
+    const lienzo = h.li.querySelector("canvas");
+    lienzo.width = Math.round(v.width); lienzo.height = Math.round(v.height);
+    await pagina.render({ canvasContext: lienzo.getContext("2d"), viewport: v }).promise;
+  }).catch((e) => console.warn("No se pudo dibujar una miniatura", e));
+}
+function moverHoja(de, a) {
+  if (a < 0 || a >= hojas.length || de === a) return;
+  hojas.splice(a, 0, hojas.splice(de, 1)[0]);
+  acomodarOrg();
+}
+function crearHoja(fuente, i) {
+  const h = { fuente, i, giro: 0 };
+  const li = h.li = document.createElement("li");
+  li._hoja = h;
+  li.draggable = true;
+  li.innerHTML = `<div class="hoja"><canvas width="85" height="110"></canvas></div><div class="num"></div>
+    <div class="botones"><button data-a="izq" aria-label="Mover antes">←</button><button data-a="girar" aria-label="Girar">↻</button><button data-a="quitar" aria-label="Quitar">✕</button><button data-a="der" aria-label="Mover después">→</button></div>`;
+  li.title = `${fuente.nombre}, página ${i + 1}`;
+  li.onclick = (e) => {
+    const a = e.target.closest("button")?.dataset.a;
+    const k = hojas.indexOf(h);
+    if (a === "izq") moverHoja(k, k - 1);
+    else if (a === "der") moverHoja(k, k + 1);
+    else if (a === "girar") { h.giro = (h.giro + 90) % 360; acomodarOrg(); }
+    else if (a === "quitar") { hojas.splice(k, 1); li.remove(); acomodarOrg(); }
+  };
+  li.ondragstart = (e) => { arrastrada = h; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", ""); };
+  li.ondragend = () => { arrastrada = null; };
+  li.ondragover = (e) => { if (arrastrada && arrastrada !== h) { e.preventDefault(); li.classList.add("destino"); } };
+  li.ondragleave = () => li.classList.remove("destino");
+  li.ondrop = (e) => {
+    e.preventDefault(); e.stopPropagation(); li.classList.remove("destino");
+    if (arrastrada && arrastrada !== h) moverHoja(hojas.indexOf(arrastrada), hojas.indexOf(h));
+  };
+  alVerse.observe(li);
+  return h;
+}
+function acomodarOrg() {
+  const ul = $("paginasOrg");
+  hojas.forEach((h, k) => {
+    if (ul.children[k] !== h.li) ul.insertBefore(h.li, ul.children[k] || null);
+    h.li.querySelector(".num").textContent = k + 1;
+    h.li.querySelector("canvas").style.transform = h.giro ? `rotate(${h.giro}deg)` : "";
+    h.li.querySelector('[data-a="izq"]').disabled = k === 0;
+    h.li.querySelector('[data-a="der"]').disabled = k === hojas.length - 1;
+  });
+  $("guardarOrg").disabled = !hojas.length;
+  $("girarTodasOrg").hidden = $("limpiarOrg").hidden = !hojas.length;
+  aviso("avisoOrg", hojas.length ? `${paginasTxt(hojas.length)}. Arrastra una página para cambiarla de lugar, o usa las flechas.` : "");
+}
+zonaDeArchivos($("zonaOrg"), $("archivosOrg"), async (fs) => {
+  const buenos = fs.filter(esPdf);
+  if (!buenos.length) return aviso("avisoOrg", "Solo se pueden abrir archivos PDF.", true);
+  aviso("avisoOrg", "Abriendo…");
+  const fallas = [];
+  for (const f of buenos) {
+    try {
+      const pdfjs = await pdfJs();
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const vista = await pdfjs.getDocument({ data: bytes.slice() }).promise;      // PDF.js se queda con su copia
+      const fuente = { nombre: f.name, bytes, vista, lib: null };
+      for (let i = 0; i < vista.numPages; i++) hojas.push(crearHoja(fuente, i));
+    } catch (e) {
+      fallas.push(e && e.name === "PasswordException" ? `«${f.name}» tiene contraseña; quítasela antes.`
+        : /visor/.test(String(e && e.message)) ? e.message : `«${f.name}» no se pudo leer como PDF.`);
+    }
+  }
+  acomodarOrg();
+  if (fallas.length) aviso("avisoOrg", fallas.join(" "), true);
+});
+$("girarTodasOrg").onclick = () => { for (const h of hojas) h.giro = (h.giro + 90) % 360; acomodarOrg(); };
+$("limpiarOrg").onclick = () => { hojas.length = 0; $("paginasOrg").textContent = ""; acomodarOrg(); };
+$("guardarOrg").onclick = async () => {
+  $("guardarOrg").disabled = true;
+  try {
+    aviso("avisoOrg", "Armando el PDF…");
+    const { PDFDocument, degrees } = await pdfLib();
+    const salida = await PDFDocument.create();
+    // Cada archivo se copia de una sola vez: así las letras e imágenes que comparten sus páginas no se repiten
+    const copias = new Map();
+    for (const fuente of new Set(hojas.map((h) => h.fuente))) {
+      try { fuente.lib ||= await PDFDocument.load(fuente.bytes); }
+      catch { throw new Error(`«${fuente.nombre}» no se pudo procesar (puede estar protegido).`); }
+      const suyas = hojas.filter((h) => h.fuente === fuente);
+      const hechas = await salida.copyPages(fuente.lib, suyas.map((h) => h.i));
+      suyas.forEach((h, k) => copias.set(h, hechas[k]));
+    }
+    for (const h of hojas) {
+      const pagina = copias.get(h);
+      if (h.giro) pagina.setRotation(degrees((pagina.getRotation().angle + h.giro) % 360));
+      salida.addPage(pagina);
+    }
+    const bytes = await salida.save();
+    filaDescarga($("salidaOrg"), bytes, sinExt(hojas[0].fuente.nombre) + " (organizado).pdf", paginasTxt(hojas.length));
+    acomodarOrg();
+    aviso("avisoOrg", "Listo. Puedes seguir cambiando y guardar otra versión.");
+  } catch (e) {
+    aviso("avisoOrg", String(e && e.message || e), true);
+  } finally {
+    $("guardarOrg").disabled = !hojas.length;
   }
 };
 
