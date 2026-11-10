@@ -49,13 +49,39 @@
   a.bajar { text-decoration: none; background: var(--acento); color: #fff; border-radius: 10px; padding: 8px 14px; font-weight: 600; white-space: nowrap; }
   .pie { color: var(--suave); font-size: 13px; text-align: center; margin-top: 24px; }
   .pie a { color: var(--acento); }
+  nav.herramientas { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+  nav.herramientas button { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); font-weight: 600; min-height: 44px; }
+  nav.herramientas button[aria-selected="true"] { background: var(--acento); color: #fff; border-color: var(--acento); }
+  .zona { border: 2px dashed var(--borde); border-radius: 14px; padding: 28px 16px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
+  .zona.encima { border-color: var(--acento); background: var(--acento-claro); }
+  .zona b { display: block; font-size: 18px; margin-bottom: 4px; }
+  .zona span { color: var(--suave); font-size: 14px; }
+  ul.filas { list-style: none; margin: 12px 0 0; padding: 0; }
+  ul.filas li { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--borde); }
+  ul.filas li:first-child { border-top: 0; }
+  button.chico { padding: 6px 10px; min-width: 40px; min-height: 40px; background: var(--acento-claro); color: var(--acento); }
+  .acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
+  .aviso { color: var(--suave); font-size: 14px; margin: 0; }
+  .aviso.error { color: var(--error); }
+  label.campo { display: block; font-weight: 600; margin-top: 14px; }
+  label.campo input[type=text] { display: block; width: 100%; margin-top: 6px; font: inherit; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); }
+  fieldset.modo { border: 0; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 6px; }
+  fieldset.modo legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
-  <h1><img src="icono.svg" alt="">Convertidor a PDF</h1>
-  <p class="sub">Word, Excel y PowerPoint a PDF. Todo pasa en tu navegador: tus archivos no se suben a ningún lado.</p>
+  <h1><img src="icono.svg" alt="">Convertidor</h1>
+  <p class="sub">Herramientas de PDF. Todo pasa en tu navegador: tus archivos no se suben a ningún lado.</p>
+
+  <nav class="herramientas" role="tablist" aria-label="Herramientas">
+    <button role="tab" data-vista="office" aria-selected="true">Office a PDF</button>
+    <button role="tab" data-vista="unir" aria-selected="false">Unir PDF</button>
+    <button role="tab" data-vista="dividir" aria-selected="false">Dividir PDF</button>
+  </nav>
+
+  <div id="vista-office">
 
   <section class="tarjeta" id="estado" aria-live="polite">
     <b id="estadoTitulo">Revisando…</b>
@@ -79,9 +105,56 @@
     <ul id="lista"></ul>
   </section>
 
+  </div>
+
+  <div id="vista-unir" hidden>
+    <section class="tarjeta">
+      <div class="zona" id="zonaUnir" tabindex="0" role="button" aria-label="Elegir los PDF que se van a unir">
+        <b>Elige o arrastra los PDF</b>
+        <span>Se unen en el orden de la lista; puedes subirlos o bajarlos.</span>
+      </div>
+      <input type="file" id="archivosUnir" multiple hidden accept=".pdf,application/pdf">
+      <ul class="filas" id="listaUnir"></ul>
+      <div class="acciones">
+        <button id="botonUnir" disabled>Unir</button>
+        <button id="limpiarUnir" class="secundario" hidden>Quitar todos</button>
+        <p class="aviso" id="avisoUnir" aria-live="polite"></p>
+      </div>
+      <ul class="filas" id="salidaUnir"></ul>
+    </section>
+  </div>
+
+  <div id="vista-dividir" hidden>
+    <section class="tarjeta">
+      <div class="zona" id="zonaDividir" tabindex="0" role="button" aria-label="Elegir el PDF que se va a dividir">
+        <b>Elige o arrastra un PDF</b>
+        <span id="infoDividir">Después dices qué páginas quieres.</span>
+      </div>
+      <input type="file" id="archivoDividir" hidden accept=".pdf,application/pdf">
+      <div id="opcionesDividir" hidden>
+        <label class="campo">Páginas
+          <input type="text" id="paginas" inputmode="text" autocomplete="off" placeholder="1-3, 5, 8-10">
+        </label>
+        <p class="aviso" style="margin-top:6px">Rangos con guion y separados por comas. Vacío: todas las páginas.</p>
+        <fieldset class="modo">
+          <legend>Qué quieres obtener</legend>
+          <label><input type="radio" name="modo" value="uno" checked> Un solo PDF con esas páginas</label>
+          <label><input type="radio" name="modo" value="rangos"> Un PDF por cada rango</label>
+          <label><input type="radio" name="modo" value="paginas"> Un PDF por cada página</label>
+        </fieldset>
+        <div class="acciones">
+          <button id="botonDividir">Dividir</button>
+          <p class="aviso" id="avisoDividir" aria-live="polite"></p>
+        </div>
+      </div>
+      <ul class="filas" id="salidaDividir"></ul>
+    </section>
+  </div>
+
   <p class="pie">Usa LibreOffice compilado para el navegador
     (<a href="https://github.com/matbeedotcom/libreoffice-document-converter">libreoffice-document-converter</a>, licencia MPL-2.0).
-    La primera vez baja unos 77 MB; después funciona sin internet.</p>
+    Para Office a PDF, la primera vez baja unos 77 MB; después funciona sin internet.
+    Unir y dividir usan <a href="https://pdf-lib.js.org/">pdf-lib</a> (licencia MIT) y no necesitan esa descarga.</p>
 </main>
 
 <script type="module">
@@ -444,6 +517,181 @@ async function preparar() {
     arrancar();
   }
 })();
+
+// ---------------------------------------------------------------- 5. menú de herramientas
+const VISTAS = ["office", "unir", "dividir"];
+function verVista(nombre) {
+  if (!VISTAS.includes(nombre)) nombre = "office";
+  for (const v of VISTAS) $("vista-" + v).hidden = v !== nombre;
+  for (const b of document.querySelectorAll("nav.herramientas button")) b.setAttribute("aria-selected", String(b.dataset.vista === nombre));
+  try { localStorage.setItem("vista", nombre); } catch {}
+}
+for (const b of document.querySelectorAll("nav.herramientas button")) b.onclick = () => verVista(b.dataset.vista);
+try { verVista(localStorage.getItem("vista") || "office"); } catch { verVista("office"); }
+
+function zonaDeArchivos(zona, entrada, alRecibir) {
+  zona.onclick = () => entrada.click();
+  zona.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); entrada.click(); } };
+  entrada.onchange = (e) => { alRecibir([...e.target.files]); e.target.value = ""; };
+  for (const ev of ["dragenter", "dragover"]) zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("encima"); });
+  for (const ev of ["dragleave", "drop"]) zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.remove("encima"); });
+  zona.addEventListener("drop", (e) => alRecibir([...e.dataTransfer.files]));
+}
+const esPdf = (f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+const sinExt = (n) => n.replace(/\.pdf$/i, "");
+
+// pdf-lib se carga hasta que se usa (medio MB, guardado para usarse sin internet)
+let _pdfLib = null;
+function pdfLib() {
+  return _pdfLib ||= new Promise((ok, mal) => {
+    const s = document.createElement("script");
+    s.src = new URL("lib/pdf-lib.min.js", base).href;
+    s.onload = () => ok(window.PDFLib);
+    s.onerror = () => { _pdfLib = null; mal(new Error("No se pudo cargar la herramienta de PDF. Revisa tu internet.")); };
+    document.head.append(s);
+  });
+}
+async function abrirPdf(f) {
+  const { PDFDocument } = await pdfLib();
+  try { return await PDFDocument.load(await f.arrayBuffer()); }
+  catch (e) {
+    if (/encrypt/i.test(String(e && e.message))) throw new Error(`«${f.name}» tiene contraseña; quítasela antes.`);
+    throw new Error(`«${f.name}» no se pudo leer como PDF.`);
+  }
+}
+function filaDescarga(lista, bytes, nombre, detalle) {
+  const li = document.createElement("li");
+  li.innerHTML = `<div class="nombre"><div></div><small></small></div><a class="bajar">Descargar</a>`;
+  li.querySelector(".nombre div").textContent = nombre;
+  li.querySelector("small").textContent = `${detalle} · ${(bytes.length / 1024).toFixed(0)} KB`;
+  const a = li.querySelector("a");
+  a.href = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  a.download = nombre;
+  lista.prepend(li);
+}
+const paginasTxt = (n) => n === 1 ? "1 página" : n + " páginas";
+
+// ---------------------------------------------------------------- 6. unir PDF
+const porUnir = [];
+function pintarUnir() {
+  const ul = $("listaUnir");
+  ul.textContent = "";
+  porUnir.forEach((f, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="nombre"><div></div></div>
+      <button class="chico" aria-label="Subir" data-m="-1">↑</button>
+      <button class="chico" aria-label="Bajar" data-m="1">↓</button>
+      <button class="chico" aria-label="Quitar" data-m="0">✕</button>`;
+    li.querySelector(".nombre div").textContent = `${i + 1}. ${f.name}`;
+    for (const b of li.querySelectorAll("button")) {
+      const m = Number(b.dataset.m);
+      b.disabled = (m === -1 && i === 0) || (m === 1 && i === porUnir.length - 1);
+      b.onclick = () => {
+        if (m === 0) porUnir.splice(i, 1);
+        else [porUnir[i], porUnir[i + m]] = [porUnir[i + m], porUnir[i]];
+        pintarUnir();
+      };
+    }
+    ul.append(li);
+  });
+  $("botonUnir").disabled = porUnir.length < 2;
+  $("botonUnir").textContent = porUnir.length < 2 ? "Unir" : `Unir ${porUnir.length} archivos`;
+  $("limpiarUnir").hidden = !porUnir.length;
+  aviso("avisoUnir", porUnir.length === 1 ? "Agrega al menos otro PDF." : "");
+}
+function aviso(id, texto, error = false) {
+  $(id).textContent = texto;
+  $(id).classList.toggle("error", error);
+}
+zonaDeArchivos($("zonaUnir"), $("archivosUnir"), (fs) => {
+  const buenos = fs.filter(esPdf);
+  porUnir.push(...buenos);
+  pintarUnir();
+  if (buenos.length < fs.length) aviso("avisoUnir", "Solo se agregan archivos PDF.", true);
+});
+$("limpiarUnir").onclick = () => { porUnir.length = 0; pintarUnir(); };
+$("botonUnir").onclick = async () => {
+  $("botonUnir").disabled = true;
+  try {
+    const { PDFDocument } = await pdfLib();
+    const salida = await PDFDocument.create();
+    let n = 0;
+    for (const [i, f] of porUnir.entries()) {
+      aviso("avisoUnir", `Uniendo ${i + 1} de ${porUnir.length}…`);
+      const doc = await abrirPdf(f);
+      for (const p of await salida.copyPages(doc, doc.getPageIndices())) { salida.addPage(p); n++; }
+    }
+    const bytes = await salida.save();
+    filaDescarga($("salidaUnir"), bytes, sinExt(porUnir[0].name) + " (unido).pdf", `${porUnir.length} archivos, ${paginasTxt(n)}`);
+    aviso("avisoUnir", "Listo.");
+  } catch (e) {
+    aviso("avisoUnir", String(e && e.message || e), true);
+  } finally {
+    $("botonUnir").disabled = porUnir.length < 2;
+  }
+};
+
+// ---------------------------------------------------------------- 7. dividir PDF
+let paraDividir = null;      // { f, doc, total }
+// "1-3, 5, 8-" → [[0,1,2],[4],[7..fin]]; lanza Error con el pedazo que no se entiende
+function leerRangos(texto, total) {
+  const limpio = texto.trim();
+  if (!limpio) return [Array.from({ length: total }, (_, i) => i)];
+  return limpio.split(/[,;]+/).map((t) => t.trim()).filter(Boolean).map((t) => {
+    const m = /^(\d+)?\s*(?:(-|–|a)\s*(\d+)?)?$/i.exec(t);
+    if (!m || (!m[1] && !m[3])) throw new Error(`No entiendo «${t}». Ejemplo: 1-3, 5, 8-10`);
+    const ini = m[1] ? Number(m[1]) : 1;
+    const fin = m[2] ? (m[3] ? Number(m[3]) : total) : ini;
+    if (ini < 1 || fin > total || ini > fin) throw new Error(`«${t}» se sale del documento: tiene ${paginasTxt(total)}.`);
+    return Array.from({ length: fin - ini + 1 }, (_, i) => ini - 1 + i);
+  });
+}
+zonaDeArchivos($("zonaDividir"), $("archivoDividir"), async (fs) => {
+  const f = fs.find(esPdf);
+  if (!f) { $("infoDividir").textContent = "Ese archivo no es un PDF."; return; }
+  $("infoDividir").textContent = "Abriendo…";
+  try {
+    const doc = await abrirPdf(f);
+    paraDividir = { f, doc, total: doc.getPageCount() };
+    $("infoDividir").textContent = `${f.name} · ${paginasTxt(paraDividir.total)}`;
+    $("opcionesDividir").hidden = false;
+    aviso("avisoDividir", "");
+  } catch (e) {
+    paraDividir = null;
+    $("opcionesDividir").hidden = true;
+    $("infoDividir").textContent = String(e && e.message || e);
+  }
+});
+$("botonDividir").onclick = async () => {
+  if (!paraDividir) return;
+  const { f, doc, total } = paraDividir;
+  const modo = document.querySelector('input[name="modo"]:checked').value;
+  $("botonDividir").disabled = true;
+  try {
+    const rangos = leerRangos($("paginas").value, total);
+    let grupos = rangos;
+    if (modo === "uno") grupos = [rangos.flat()];
+    if (modo === "paginas") grupos = rangos.flat().map((i) => [i]);
+    if (grupos.length > 200) throw new Error(`Saldrían ${grupos.length} archivos; elige menos páginas.`);
+    const { PDFDocument } = await pdfLib();
+    const nombre = sinExt(f.name);
+    const hechos = [];
+    for (const [k, g] of grupos.entries()) {
+      aviso("avisoDividir", `Preparando ${k + 1} de ${grupos.length}…`);
+      const salida = await PDFDocument.create();
+      for (const p of await salida.copyPages(doc, g)) salida.addPage(p);
+      const seguidas = g.every((x, j) => j === 0 || x === g[j - 1] + 1);
+      const etiqueta = g.length === 1 ? `p${g[0] + 1}` : seguidas ? `p${g[0] + 1}-${g[g.length - 1] + 1}` : `${g.length} páginas`;
+      hechos.push([await salida.save(), `${nombre} (${etiqueta}).pdf`, paginasTxt(g.length)]);
+    }
+    for (const h of hechos.reverse()) filaDescarga($("salidaDividir"), ...h);
+    aviso("avisoDividir", grupos.length === 1 ? "Listo." : `Listo: ${grupos.length} archivos.`);
+  } catch (e) {
+    aviso("avisoDividir", String(e && e.message || e), true);
+  } finally {
+    $("botonDividir").disabled = false;
+  }
+};
 
 $("botonPreparar").onclick = () => preparar().catch(() => {});
 $("zona").onclick = () => $("archivos").click();
