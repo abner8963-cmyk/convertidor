@@ -78,10 +78,13 @@
   .aviso { color: var(--suave); font-size: 14px; margin: 0; }
   .aviso.error { color: var(--error); }
   label.campo { display: block; font-weight: 600; margin-top: 14px; }
-  label.campo input[type=text], label.campo select { display: block; width: 100%; margin-top: 6px; font: inherit; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); }
+  label.campo input[type=text], label.campo input[type=number], label.campo select { display: block; width: 100%; margin-top: 6px; font: inherit; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); }
   .opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 12px; }
   fieldset.modo { border: 0; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 6px; }
   fieldset.modo legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
+  .previa { margin-top: 16px; text-align: center; }
+  .previa canvas { display: block; margin: 0 auto 6px; max-width: min(100%, 320px); height: auto; background: #fff; border: 1px solid var(--borde); }
+  .previa small { color: var(--suave); }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -99,6 +102,8 @@
       <li><a href="#imagenes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 18l5-5 3.5 3.5L16 13l5 5"/></svg><b>Imágenes a PDF</b><span>Fotos, capturas y escaneos</span></a></li>
       <li><a href="#aimagenes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h6l4 4v5H6z"/><path d="M12 3v4h4"/><rect x="8" y="14" width="13" height="7" rx="1.5"/><path d="M9 20l3.5-3 2.5 2 2-1.5 3 2.5"/></svg><b>PDF a imágenes</b><span>Cada página en JPG o PNG</span></a></li>
       <li><a href="#comprimir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M13 9.5v3.5M11.3 11.3L13 13l1.7-1.7M13 19.5V16M11.3 17.7L13 16l1.7 1.7"/></svg><b>Comprimir PDF</b><span>Que pese menos para enviarlo</span></a></li>
+      <li><a href="#numeros"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M10.8 14.2l1.4-1v4.6M10.8 17.8h2.8"/></svg><b>Números de página</b><span>Numerar las hojas</span></a></li>
+      <li><a href="#marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 17.5l6-6M9 13.5l2-2M13 17.5l2-2"/></svg><b>Marca de agua</b><span>Texto, sello o logotipo encima</span></a></li>
     </ul>
   </div>
 
@@ -300,6 +305,150 @@
         <p class="aviso" id="avisoComp" aria-live="polite"></p>
       </div>
       <ul class="filas" id="salidaComp"></ul>
+    </section>
+  </div>
+
+  <div id="vista-numeros" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Números de página</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaNum" tabindex="0" role="button" aria-label="Elegir el PDF que se va a numerar">
+        <b>Elige o arrastra un PDF</b>
+        <span id="infoNum">Después eliges dónde va el número.</span>
+      </div>
+      <input type="file" id="archivoNum" hidden accept=".pdf,application/pdf">
+      <div id="opcionesNum" hidden>
+        <div class="opciones">
+          <label class="campo">Posición
+            <select id="posNum">
+              <option value="abajo-centro">Abajo, al centro</option>
+              <option value="abajo-der">Abajo, a la derecha</option>
+              <option value="abajo-izq">Abajo, a la izquierda</option>
+              <option value="arriba-centro">Arriba, al centro</option>
+              <option value="arriba-der">Arriba, a la derecha</option>
+              <option value="arriba-izq">Arriba, a la izquierda</option>
+            </select>
+          </label>
+          <label class="campo">Cómo se escribe
+            <select id="formatoNum">
+              <option value="{n}">1</option>
+              <option value="Página {n}">Página 1</option>
+              <option value="{n} de {t}">1 de 12</option>
+              <option value="Página {n} de {t}">Página 1 de 12</option>
+              <option value="- {n} -">- 1 -</option>
+            </select>
+          </label>
+          <label class="campo">Tamaño de la letra
+            <select id="letraNum">
+              <option value="9">Chica</option>
+              <option value="11" selected>Normal</option>
+              <option value="14">Grande</option>
+            </select>
+          </label>
+          <label class="campo">Empezar a contar en
+            <input type="number" id="primeroNum" value="1" min="0" step="1" inputmode="numeric">
+          </label>
+          <label class="campo">Páginas que llevan número
+            <input type="text" id="paginasNum" autocomplete="off" placeholder="Todas">
+          </label>
+        </div>
+        <p class="aviso" style="margin-top:6px">Para saltarte la portada escribe «2-» en las páginas.</p>
+        <div class="acciones">
+          <button id="botonNum">Poner números</button>
+          <p class="aviso" id="avisoNum" aria-live="polite"></p>
+        </div>
+      </div>
+      <ul class="filas" id="salidaNum"></ul>
+      <div class="previa" id="previaNum" hidden><canvas></canvas><small></small></div>
+    </section>
+  </div>
+
+  <div id="vista-marca" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Marca de agua</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaMarca" tabindex="0" role="button" aria-label="Elegir el PDF que llevará la marca">
+        <b>Elige o arrastra un PDF</b>
+        <span id="infoMarca">Después escribes el texto o eliges la imagen que va encima.</span>
+      </div>
+      <input type="file" id="archivoMarca" hidden accept=".pdf,application/pdf">
+      <div id="opcionesMarca" hidden>
+        <fieldset class="modo">
+          <legend>Qué se pone encima</legend>
+          <label><input type="radio" name="tipoMarca" value="texto" checked> Un texto (marca de agua o sello)</label>
+          <label><input type="radio" name="tipoMarca" value="imagen"> Una imagen (logotipo o firma escaneada)</label>
+        </fieldset>
+        <div id="marcaTexto">
+          <label class="campo">Texto
+            <input type="text" id="textoMarca" autocomplete="off" placeholder="CONFIDENCIAL" maxlength="80">
+          </label>
+          <div class="opciones">
+            <label class="campo">Tamaño de la letra
+              <select id="letraMarca">
+                <option value="16">Chica</option>
+                <option value="32">Mediana</option>
+                <option value="56" selected>Grande</option>
+                <option value="90">Muy grande</option>
+              </select>
+            </label>
+            <label class="campo">Color
+              <select id="colorMarca">
+                <option value="0.45,0.45,0.45">Gris</option>
+                <option value="0,0,0">Negro</option>
+                <option value="0.78,0.1,0.1">Rojo</option>
+                <option value="0.1,0.3,0.7">Azul</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div id="marcaImagen" hidden>
+          <label class="campo">Imagen (PNG o JPG)
+            <input type="file" id="imagenMarca" accept="image/*" style="display:block;margin-top:6px;font:inherit">
+          </label>
+          <div class="opciones">
+            <label class="campo">Tamaño
+              <select id="anchoMarca">
+                <option value="0.15">Chica</option>
+                <option value="0.3" selected>Mediana</option>
+                <option value="0.5">Grande</option>
+                <option value="0.8">Casi toda la hoja</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="opciones">
+          <label class="campo">Dónde va
+            <select id="posMarca">
+              <option value="diagonal">Al centro, en diagonal</option>
+              <option value="centro">Al centro, sin inclinar</option>
+              <option value="mosaico">Repetida en toda la hoja</option>
+              <option value="arriba-izq">Arriba, a la izquierda</option>
+              <option value="arriba-centro">Arriba, al centro</option>
+              <option value="arriba-der">Arriba, a la derecha</option>
+              <option value="abajo-izq">Abajo, a la izquierda</option>
+              <option value="abajo-centro">Abajo, al centro</option>
+              <option value="abajo-der">Abajo, a la derecha</option>
+            </select>
+          </label>
+          <label class="campo">Transparencia
+            <select id="opacidadMarca">
+              <option value="0.15">Muy tenue</option>
+              <option value="0.3" selected>Tenue</option>
+              <option value="0.55">Media</option>
+              <option value="1">Sin transparencia (sello)</option>
+            </select>
+          </label>
+          <label class="campo">Páginas
+            <input type="text" id="paginasMarca" autocomplete="off" placeholder="Todas">
+          </label>
+        </div>
+        <div class="acciones">
+          <button id="botonMarca">Poner marca</button>
+          <p class="aviso" id="avisoMarca" aria-live="polite"></p>
+        </div>
+      </div>
+      <ul class="filas" id="salidaMarca"></ul>
+      <div class="previa" id="previaMarca" hidden><canvas></canvas><small></small></div>
     </section>
   </div>
 
@@ -675,7 +824,7 @@ async function iniciarOffice() {
 }
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir"];
+const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca"];
 function verVista() {
   let nombre = location.hash.slice(1) || "inicio";
   if (!VISTAS.includes(nombre)) nombre = "inicio";
@@ -1352,6 +1501,183 @@ $("botonComp").onclick = async () => {
   }
   aviso("avisoComp", notas.length ? notas.join(" ") : "Listo.", fallo);
   $("botonComp").disabled = !porComprimir.length;
+};
+
+// ---------------------------------------------------------------- 12. números de página y marca de agua
+// Las dos escriben encima de las páginas con pdf-lib. Las medidas se piensan «como se ve la hoja»:
+// colocar() las pasa a las del PDF aunque la página esté girada (Rotate) o recortada (CropBox).
+function unPdf(s) {            // s = "Num" o "Marca"; devuelve una función que da { f, total } o null
+  let actual = null;
+  zonaDeArchivos($("zona" + s), $("archivo" + s), async (fs) => {
+    const f = fs.find(esPdf);
+    if (!f) { $("info" + s).textContent = "Ese archivo no es un PDF."; return; }
+    $("info" + s).textContent = "Abriendo…";
+    $("previa" + s).hidden = true;
+    try {
+      const doc = await abrirPdf(f);
+      actual = { f, total: doc.getPageCount() };
+      $("info" + s).textContent = `${f.name} · ${paginasTxt(actual.total)}`;
+      $("opciones" + s).hidden = false;
+      aviso("aviso" + s, "");
+    } catch (e) {
+      actual = null;
+      $("opciones" + s).hidden = true;
+      $("info" + s).textContent = String(e && e.message || e);
+    }
+  });
+  return () => actual;
+}
+const giroDe = (p) => ((p.getRotation().angle % 360) + 360) % 360;
+function tamVisible(p) { const c = p.getCropBox(); return giroDe(p) % 180 ? [c.height, c.width] : [c.width, c.height]; }
+// Algo de ancho × alto, con su centro en (cx, cy) medido desde la esquina de abajo a la izquierda
+// de la hoja como se ve, e inclinado «angulo» grados → dónde y cómo dibujarlo en el PDF
+function colocar(L, p, cx, cy, ancho, alto, angulo) {
+  const c = p.getCropBox(), r = giroDe(p), t = angulo * Math.PI / 180, co = Math.cos(t), se = Math.sin(t);
+  const vx = cx - ancho / 2 * co + alto / 2 * se, vy = cy - ancho / 2 * se - alto / 2 * co;
+  const [x, y] = r === 90 ? [c.x + c.width - vy, c.y + vx] : r === 180 ? [c.x + c.width - vx, c.y + c.height - vy]
+    : r === 270 ? [c.x + vy, c.y + c.height - vx] : [c.x + vx, c.y + vy];
+  return { x, y, rotate: L.degrees(angulo + r) };
+}
+// Encierra lo que ya tenía la página entre q y Q: hay PDF que dejan las medidas cambiadas al
+// terminar de dibujar, y lo nuevo saldría movido o de otro tamaño
+function envolver(doc, p) {
+  p.node.normalize();
+  const contenido = p.node.Contents();
+  if (!contenido || typeof contenido.insert !== "function") return;
+  contenido.insert(0, doc.context.register(doc.context.stream("q\n")));
+  contenido.push(doc.context.register(doc.context.stream("\nQ\n")));
+}
+function medirTexto(fuente, texto, size) {
+  try { return fuente.widthOfTextAtSize(texto, size); }
+  catch { throw new Error("El texto tiene símbolos que no se pueden escribir (por ejemplo emojis). Usa letras, números y signos comunes."); }
+}
+async function mostrarPrevia(id, bytes, i) {
+  try {
+    const pdfjs = await pdfJs();
+    const vista = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+    const pagina = await vista.getPage(i + 1);
+    const b = pagina.getViewport({ scale: 1 });
+    const v = pagina.getViewport({ scale: 640 / Math.max(b.width, b.height) });
+    const lienzo = $(id).querySelector("canvas");
+    lienzo.width = Math.round(v.width); lienzo.height = Math.round(v.height);
+    await pagina.render({ canvasContext: lienzo.getContext("2d"), viewport: v }).promise;
+    $(id).querySelector("small").textContent = `Así quedó la página ${i + 1}`;
+    $(id).hidden = false;
+    vista.destroy();
+  } catch (e) { console.warn("No se pudo mostrar la vista previa", e); }
+}
+const enOrden = (texto, total) => [...new Set(leerRangos(texto, total).flat())].sort((a, b) => a - b);
+function centroEn(pos, W, H, ancho, alto, m) {      // "arriba-izq", "abajo-centro"…
+  const [v, h] = pos.split("-");
+  return [h === "izq" ? m + ancho / 2 : h === "der" ? W - m - ancho / 2 : W / 2, v === "abajo" ? m + alto / 2 : H - m - alto / 2];
+}
+
+const pdfNum = unPdf("Num");
+$("botonNum").onclick = async () => {
+  const a = pdfNum();
+  if (!a) return;
+  $("botonNum").disabled = true;
+  try {
+    const cuales = enOrden($("paginasNum").value, a.total);
+    aviso("avisoNum", "Poniendo los números…");
+    const L = await pdfLib(), doc = await abrirPdf(a.f);
+    const fuente = await doc.embedFont(L.StandardFonts.Helvetica);
+    const primero = Math.max(0, parseInt($("primeroNum").value, 10) || 0), ultimo = primero + cuales.length - 1;
+    const formato = $("formatoNum").value, size = Number($("letraNum").value), alto = size * 0.72;
+    cuales.forEach((i, k) => {
+      const p = doc.getPage(i), [W, H] = tamVisible(p);
+      const texto = formato.replace("{n}", primero + k).replace("{t}", ultimo);
+      const ancho = fuente.widthOfTextAtSize(texto, size);
+      const [cx, cy] = centroEn($("posNum").value, W, H, ancho, alto, 30);
+      envolver(doc, p);
+      p.drawText(texto, { ...colocar(L, p, cx, cy, ancho, alto, 0), size, font: fuente, color: L.rgb(0, 0, 0) });
+    });
+    const bytes = await doc.save();
+    filaDescarga($("salidaNum"), bytes, sinExt(a.f.name) + " (numerado).pdf", `${paginasTxt(cuales.length)} con número, del ${primero} al ${ultimo}`);
+    aviso("avisoNum", "Listo.");
+    await mostrarPrevia("previaNum", bytes, cuales[0]);
+  } catch (e) {
+    aviso("avisoNum", String(e && e.message || e), true);
+  } finally {
+    $("botonNum").disabled = false;
+  }
+};
+
+const pdfMarca = unPdf("Marca");
+for (const r of document.querySelectorAll('input[name="tipoMarca"]')) r.onchange = () => {
+  const imagen = document.querySelector('input[name="tipoMarca"]:checked').value === "imagen";
+  $("marcaTexto").hidden = imagen; $("marcaImagen").hidden = !imagen;
+};
+async function imagenParaPdf(doc, f) {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  try {
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && orientacionJpeg(bytes) === 1) return await doc.embedJpg(bytes);
+    if (bytes[0] === 0x89 && bytes[1] === 0x50) return await doc.embedPng(bytes);
+  } catch { /* imagen rara: se redibuja abajo */ }
+  let mapa;
+  try { mapa = await createImageBitmap(f); } catch { throw new Error(`«${f.name}» no se pudo abrir como imagen.`); }
+  const lienzo = document.createElement("canvas");
+  lienzo.width = mapa.width; lienzo.height = mapa.height;
+  lienzo.getContext("2d").drawImage(mapa, 0, 0);
+  mapa.close();
+  const blob = await new Promise((ok) => lienzo.toBlob(ok, "image/png"));
+  return doc.embedPng(new Uint8Array(await blob.arrayBuffer()));
+}
+$("botonMarca").onclick = async () => {
+  const a = pdfMarca();
+  if (!a) return;
+  $("botonMarca").disabled = true;
+  try {
+    const cuales = enOrden($("paginasMarca").value, a.total);
+    const conImagen = document.querySelector('input[name="tipoMarca"]:checked').value === "imagen";
+    const texto = $("textoMarca").value.trim() || "CONFIDENCIAL", archivoImagen = $("imagenMarca").files[0];
+    if (conImagen && !archivoImagen) throw new Error("Elige la imagen que va encima.");
+    aviso("avisoMarca", "Poniendo la marca…");
+    const L = await pdfLib(), doc = await abrirPdf(a.f);
+    const pos = $("posMarca").value, opacity = Number($("opacidadMarca").value);
+    const fuente = conImagen ? null : await doc.embedFont(L.StandardFonts.HelveticaBold);
+    const imagen = conImagen ? await imagenParaPdf(doc, archivoImagen) : null;
+    const color = L.rgb(...$("colorMarca").value.split(",").map(Number));
+    if (fuente) medirTexto(fuente, texto, 10);
+    for (const i of cuales) {
+      const p = doc.getPage(i), [W, H] = tamVisible(p);
+      const angulo = imagen ? 0 : pos === "diagonal" ? Math.atan2(H, W) * 180 / Math.PI : pos === "mosaico" ? 30 : 0;
+      const largoMax = (pos === "diagonal" ? Math.hypot(W, H) : W) * 0.86;      // que no se salga de la hoja
+      let ancho, alto, size = 0;
+      if (imagen) {
+        ancho = Math.min(W * Number($("anchoMarca").value), largoMax);
+        alto = ancho * imagen.height / imagen.width;
+        if (alto > H * 0.86) { ancho *= H * 0.86 / alto; alto = H * 0.86; }
+      } else {
+        size = Number($("letraMarca").value);
+        if (pos === "mosaico") size = Math.min(size, 40);
+        ancho = fuente.widthOfTextAtSize(texto, size);
+        if (ancho > largoMax) { size *= largoMax / ancho; ancho = largoMax; }
+        alto = size * 0.72;
+      }
+      const centros = [];
+      if (pos === "mosaico") {
+        const pasoX = ancho + Math.max(60, ancho * 0.4), pasoY = Math.max(alto * 2.2, ancho * 0.6, 110);
+        for (let y = pasoY / 2, fila = 0; y < H + pasoY / 2; y += pasoY, fila++)
+          for (let x = fila % 2 ? pasoX / 2 : 0; x < W + pasoX / 2; x += pasoX) centros.push([x, y]);
+      } else if (pos === "centro" || pos === "diagonal") centros.push([W / 2, H / 2]);
+      else centros.push(centroEn(pos, W, H, ancho, alto, 36));
+      envolver(doc, p);
+      for (const [cx, cy] of centros) {
+        const donde = colocar(L, p, cx, cy, ancho, alto, angulo);
+        if (imagen) p.drawImage(imagen, { ...donde, width: ancho, height: alto, opacity });
+        else p.drawText(texto, { ...donde, size, font: fuente, color, opacity });
+      }
+    }
+    const bytes = await doc.save();
+    filaDescarga($("salidaMarca"), bytes, sinExt(a.f.name) + " (con marca).pdf", `Marca en ${paginasTxt(cuales.length)}`);
+    aviso("avisoMarca", "Listo. Puedes cambiar las opciones y probar otra vez.");
+    await mostrarPrevia("previaMarca", bytes, cuales[0]);
+  } catch (e) {
+    aviso("avisoMarca", String(e && e.message || e), true);
+  } finally {
+    $("botonMarca").disabled = false;
+  }
 };
 
 $("botonPreparar").onclick = () => preparar().catch(() => {});
