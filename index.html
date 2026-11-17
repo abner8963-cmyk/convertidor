@@ -78,7 +78,7 @@
   .aviso { color: var(--suave); font-size: 14px; margin: 0; }
   .aviso.error { color: var(--error); }
   label.campo { display: block; font-weight: 600; margin-top: 14px; }
-  label.campo input[type=text], label.campo input[type=number], label.campo select { display: block; width: 100%; margin-top: 6px; font: inherit; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); }
+  label.campo input[type=text], label.campo input[type=password], label.campo input[type=number], label.campo select { display: block; width: 100%; margin-top: 6px; font: inherit; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); }
   .opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 12px; }
   fieldset.modo { border: 0; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 6px; }
   fieldset.modo legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
@@ -104,6 +104,8 @@
       <li><a href="#comprimir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M13 9.5v3.5M11.3 11.3L13 13l1.7-1.7M13 19.5V16M11.3 17.7L13 16l1.7 1.7"/></svg><b>Comprimir PDF</b><span>Que pese menos para enviarlo</span></a></li>
       <li><a href="#numeros"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M10.8 14.2l1.4-1v4.6M10.8 17.8h2.8"/></svg><b>Números de página</b><span>Numerar las hojas</span></a></li>
       <li><a href="#marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 17.5l6-6M9 13.5l2-2M13 17.5l2-2"/></svg><b>Marca de agua</b><span>Texto, sello o logotipo encima</span></a></li>
+      <li><a href="#proteger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><path d="M12 15v2"/></svg><b>Proteger PDF</b><span>Ponerle contraseña para abrirlo</span></a></li>
+      <li><a href="#desbloquear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/><path d="M12 15v2"/></svg><b>Quitar contraseña</b><span>Desbloquear un PDF protegido</span></a></li>
     </ul>
   </div>
 
@@ -452,10 +454,66 @@
     </section>
   </div>
 
+  <div id="vista-proteger" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Proteger PDF</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaProt" tabindex="0" role="button" aria-label="Elegir el PDF que se va a proteger">
+        <b>Elige o arrastra un PDF</b>
+        <span id="infoProt">Después escribes la contraseña que pedirá al abrirlo.</span>
+      </div>
+      <input type="file" id="archivoProt" hidden accept=".pdf,application/pdf">
+      <div id="opcionesProt" hidden>
+        <div class="opciones">
+          <label class="campo">Contraseña
+            <input type="password" id="claveProt" autocomplete="new-password">
+          </label>
+          <label class="campo">Repite la contraseña
+            <input type="password" id="clave2Prot" autocomplete="new-password">
+          </label>
+        </div>
+        <fieldset class="modo">
+          <label><input type="checkbox" id="verProt"> Ver lo que escribo</label>
+        </fieldset>
+        <div class="acciones">
+          <button id="botonProt">Proteger</button>
+          <p class="aviso" id="avisoProt" aria-live="polite"></p>
+        </div>
+        <p class="aviso" style="margin-top:12px">Guarda bien la contraseña: si se pierde, el PDF protegido ya no se puede abrir. Tu archivo original no cambia.</p>
+      </div>
+      <ul class="filas" id="salidaProt"></ul>
+    </section>
+  </div>
+
+  <div id="vista-desbloquear" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Quitar contraseña</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaQuitar" tabindex="0" role="button" aria-label="Elegir el PDF al que se le quita la contraseña">
+        <b>Elige o arrastra un PDF protegido</b>
+        <span id="infoQuitar">Necesitas saber la contraseña; aquí solo se quita para no escribirla cada vez.</span>
+      </div>
+      <input type="file" id="archivoQuitar" hidden accept=".pdf,application/pdf">
+      <div id="opcionesQuitar" hidden>
+        <label class="campo" id="campoQuitar">Contraseña del PDF
+          <input type="password" id="claveQuitar" autocomplete="off">
+        </label>
+        <fieldset class="modo" id="verCampoQuitar">
+          <label><input type="checkbox" id="verQuitar"> Ver lo que escribo</label>
+        </fieldset>
+        <div class="acciones">
+          <button id="botonQuitar">Quitar contraseña</button>
+          <p class="aviso" id="avisoQuitar" aria-live="polite"></p>
+        </div>
+      </div>
+      <ul class="filas" id="salidaQuitar"></ul>
+    </section>
+  </div>
+
   <p class="pie">Usa LibreOffice compilado para el navegador
     (<a href="https://github.com/matbeedotcom/libreoffice-document-converter">libreoffice-document-converter</a>, licencia MPL-2.0).
     Para Office a PDF, la primera vez baja unos 77 MB; después funciona sin internet.
-    Las herramientas de PDF usan <a href="https://pdf-lib.js.org/">pdf-lib</a> (MIT) y <a href="https://mozilla.github.io/pdf.js/">PDF.js</a> (Apache-2.0) y no necesitan esa descarga.</p>
+    Las herramientas de PDF usan <a href="https://pdf-lib.js.org/">pdf-lib</a> (MIT), <a href="https://mozilla.github.io/pdf.js/">PDF.js</a> (Apache-2.0) y <a href="https://qpdf.sourceforge.io/">qpdf</a> (Apache-2.0) y no necesitan esa descarga.</p>
 </main>
 
 <script type="module">
@@ -824,7 +882,7 @@ async function iniciarOffice() {
 }
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca"];
+const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear"];
 function verVista() {
   let nombre = location.hash.slice(1) || "inicio";
   if (!VISTAS.includes(nombre)) nombre = "inicio";
@@ -861,7 +919,7 @@ async function abrirPdf(f) {
   const { PDFDocument } = await pdfLib();
   try { return await PDFDocument.load(await f.arrayBuffer()); }
   catch (e) {
-    if (/encrypt/i.test(String(e && e.message))) throw new Error(`«${f.name}» tiene contraseña; quítasela antes.`);
+    if (/encrypt/i.test(String(e && e.message))) throw new Error(`«${f.name}» tiene contraseña; quítasela primero con «Quitar contraseña».`);
     throw new Error(`«${f.name}» no se pudo leer como PDF.`);
   }
 }
@@ -1083,7 +1141,7 @@ zonaDeArchivos($("zonaOrg"), $("archivosOrg"), async (fs) => {
       const fuente = { nombre: f.name, bytes, vista, lib: null };
       for (let i = 0; i < vista.numPages; i++) hojas.push(crearHoja(fuente, i));
     } catch (e) {
-      fallas.push(e && e.name === "PasswordException" ? `«${f.name}» tiene contraseña; quítasela antes.`
+      fallas.push(e && e.name === "PasswordException" ? `«${f.name}» tiene contraseña; quítasela primero con «Quitar contraseña».`
         : /visor/.test(String(e && e.message)) ? e.message : `«${f.name}» no se pudo leer como PDF.`);
     }
   }
@@ -1286,7 +1344,7 @@ zonaDeArchivos($("zonaAImg"), $("archivoAImg"), async (fs) => {
   } catch (e) {
     paraImagenes = null;
     $("opcionesAImg").hidden = true;
-    $("infoAImg").textContent = e && e.name === "PasswordException" ? `«${f.name}» tiene contraseña; quítasela antes.`
+    $("infoAImg").textContent = e && e.name === "PasswordException" ? `«${f.name}» tiene contraseña; quítasela primero con «Quitar contraseña».`
       : /visor/.test(String(e && e.message)) ? e.message : `«${f.name}» no se pudo leer como PDF.`;
   }
 });
@@ -1677,6 +1735,127 @@ $("botonMarca").onclick = async () => {
     aviso("avisoMarca", String(e && e.message || e), true);
   } finally {
     $("botonMarca").disabled = false;
+  }
+};
+
+// ---------------------------------------------------------------- 13. proteger y quitar contraseña
+// pdf-lib no cifra, así que esto lo hace qpdf (el programa de siempre, compilado para el navegador).
+// Cada operación usa una copia nueva de qpdf: es un programa de consola y termina al acabar.
+let _qpdf = null;
+function qpdfListo() {
+  return _qpdf ||= new Promise((ok, mal) => {
+    const s = document.createElement("script");
+    s.src = new URL("lib/qpdf.js", base).href;
+    s.onload = () => ok(window.Module);
+    s.onerror = () => { _qpdf = null; mal(new Error("No se pudo cargar la herramienta de contraseñas. Revisa tu internet.")); };
+    document.head.append(s);
+  });
+}
+// Corre qpdf con el PDF en /in.pdf; devuelve el código de salida, lo que dijo y, si lo hubo, /out.pdf
+async function qpdf(args, entrada) {
+  const crear = await qpdfListo();
+  // qpdf escribe sus mensajes en la consola, y la toma en el momento de crearse: ahí se le pasa una lista
+  const dicho = [], { log, error } = console;
+  let creando;
+  console.log = console.error = (x) => dicho.push(String(x));
+  try { creando = crear({ locateFile: () => new URL("lib/qpdf.wasm", base).href }); }
+  finally { console.log = log; console.error = error; }
+  const m = await creando;
+  m.FS.writeFile("/in.pdf", entrada);
+  let codigo;
+  try { codigo = m.callMain(args); }
+  catch (e) { codigo = e && typeof e.status === "number" ? e.status : 2; }
+  let salida = null;
+  if (codigo === 0 || codigo === 3) try { salida = m.FS.readFile("/out.pdf"); } catch {}
+  return { codigo, salida, malaClave: codigo === 2 && /invalid password/i.test(dicho.join("\n")) };
+}
+// 0 = pide contraseña (o la que se dio no es), 2 = no está protegido, 3 = protegido pero abre sin contraseña
+async function pideClave(bytes, clave = "") {
+  const r = await qpdf(["--password=" + clave, "--requires-password", "/in.pdf"], bytes);
+  return r.malaClave ? 0 : r.codigo;
+}
+const pintar = () => new Promise((r) => setTimeout(r, 30));    // qpdf ocupa la página mientras trabaja: antes se deja ver el aviso
+function unPdfConClave(s, alAbrir) {      // s = "Prot" o "Quitar"; alAbrir(estado, f) devuelve el texto de error o nada
+  let actual = null;
+  zonaDeArchivos($("zona" + s), $("archivo" + s), async (fs) => {
+    const f = fs.find(esPdf);
+    actual = null;
+    $("opciones" + s).hidden = true;
+    aviso("aviso" + s, "");
+    if (!f) { $("info" + s).textContent = "Ese archivo no es un PDF."; return; }
+    $("info" + s).textContent = "Abriendo…";
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      if (!new TextDecoder("latin1").decode(bytes.subarray(0, 1024)).includes("%PDF-")) throw new Error(`«${f.name}» no se pudo leer como PDF.`);
+      const estado = await pideClave(bytes);
+      const error = alAbrir(estado, f);
+      if (error) throw new Error(error);
+      actual = { f, bytes, estado };
+      $("info" + s).textContent = `${f.name} · ${tamTxt(bytes.length)}`;
+      $("opciones" + s).hidden = false;
+    } catch (e) {
+      $("info" + s).textContent = String(e && e.message || e);
+    }
+  });
+  return () => actual;
+}
+function verClaves(casilla, ...campos) {
+  $(casilla).onchange = () => { for (const c of campos) $(c).type = $(casilla).checked ? "text" : "password"; };
+}
+
+const pdfProt = unPdfConClave("Prot", (estado, f) =>
+  estado !== 2 ? `«${f.name}» ya está protegido. Para cambiarle la contraseña, primero quítasela con «Quitar contraseña».` : "");
+verClaves("verProt", "claveProt", "clave2Prot");
+$("botonProt").onclick = async () => {
+  const a = pdfProt();
+  if (!a) return;
+  const clave = $("claveProt").value;
+  if (!clave) return aviso("avisoProt", "Escribe una contraseña.", true);
+  if (clave !== $("clave2Prot").value) return aviso("avisoProt", "Las dos contraseñas no son iguales.", true);
+  $("botonProt").disabled = true;
+  try {
+    aviso("avisoProt", "Protegiendo…");
+    await pintar();
+    const r = await qpdf(["--encrypt", "--user-password=" + clave, "--owner-password=" + clave, "--bits=256", "--", "/in.pdf", "/out.pdf"], a.bytes);
+    if (!r.salida) throw new Error(`«${a.f.name}» no se pudo proteger; puede estar dañado.`);
+    filaDescarga($("salidaProt"), r.salida, sinExt(a.f.name) + " (protegido).pdf", "Pide contraseña al abrirlo");
+    aviso("avisoProt", "Listo. Prueba abrirlo antes de borrar el original.");
+  } catch (e) {
+    aviso("avisoProt", String(e && e.message || e), true);
+  } finally {
+    $("botonProt").disabled = false;
+  }
+};
+
+const pdfQuitar = unPdfConClave("Quitar", (estado, f) => {
+  if (estado === 2) return `«${f.name}» no tiene contraseña ni restricciones: no hay nada que quitar.`;
+  const pide = estado === 0;
+  $("campoQuitar").hidden = $("verCampoQuitar").hidden = !pide;
+  $("claveQuitar").value = "";
+  $("botonQuitar").textContent = pide ? "Quitar contraseña" : "Quitar restricciones";
+  if (!pide) aviso("avisoQuitar", "Este PDF abre sin contraseña, pero tiene restricciones (imprimir, copiar o modificar).");
+});
+verClaves("verQuitar", "claveQuitar");
+$("botonQuitar").onclick = async () => {
+  const a = pdfQuitar();
+  if (!a) return;
+  const clave = a.estado === 0 ? $("claveQuitar").value : "";
+  if (a.estado === 0 && !clave) return aviso("avisoQuitar", "Escribe la contraseña del PDF.", true);
+  $("botonQuitar").disabled = true;
+  try {
+    aviso("avisoQuitar", "Quitando…");
+    await pintar();
+    const r = await qpdf(["--password=" + clave, "--decrypt", "/in.pdf", "/out.pdf"], a.bytes);
+    if (!r.salida) {
+      if (r.malaClave) throw new Error("Esa no es la contraseña de este PDF.");
+      throw new Error(`«${a.f.name}» no se pudo desbloquear; puede estar dañado.`);
+    }
+    filaDescarga($("salidaQuitar"), r.salida, sinExt(a.f.name).replace(/ \(protegido\)$/, "") + " (sin contraseña).pdf", a.estado === 0 ? "Ya abre sin contraseña" : "Ya sin restricciones");
+    aviso("avisoQuitar", "Listo.");
+  } catch (e) {
+    aviso("avisoQuitar", String(e && e.message || e), true);
+  } finally {
+    $("botonQuitar").disabled = false;
   }
 };
 

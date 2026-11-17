@@ -19,3 +19,9 @@ de datos móviles que no llegan a GitHub Pages por IPv4).
 - LibreOffice necesita `SharedArrayBuffer`, que exige los encabezados COOP/COEP. En Cloudflare
   los pone `_headers`; GitHub Pages no deja configurarlos, así que ahí los pone `sw.js` (un service worker), que además sirve los
   archivos guardados y deja la página funcionando sin internet.
+
+## Proteger y quitar contraseña
+
+Lo hace [qpdf](https://github.com/qpdf/qpdf) 12.2.0 (Apache-2.0) compilado a WebAssembly, del paquete
+[`@neslinesli93/qpdf-wasm`](https://github.com/neslinesli93/qpdf-wasm) 0.3.1 (ISC): `lib/qpdf.js` y
+`lib/qpdf.wasm`, sin cambios. Cifra con AES de 256 bits.
