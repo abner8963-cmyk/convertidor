@@ -7,9 +7,10 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "12";
+const VERSION = "13";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice
+const CACHE_OCR = "convertidor-ocr-7.0.0";        // cambia solo si cambia Tesseract o sus idiomas
 const APP = ["./", "index.html", "manifest.webmanifest", "icono.svg", "partes.json",
              "lib/pdf-lib.min.js", "lib/pdf.min.mjs", "lib/pdf.worker.min.mjs", "lib/qpdf.js", "lib/qpdf.wasm", "lo/soffice.js", "lo/soffice.worker.js", "lo/browser.js", "lo/browser.worker.global.js"];
 
@@ -20,7 +21,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
     for (const nombre of await caches.keys()) {
-      if (nombre !== CACHE_APP && nombre !== CACHE_LO) await caches.delete(nombre);
+      if (nombre !== CACHE_APP && nombre !== CACHE_LO && nombre !== CACHE_OCR) await caches.delete(nombre);
     }
     await self.clients.claim();
   })());
@@ -74,6 +75,17 @@ async function deLibreOffice(peticion, nombre) {
   return conCabeceras(resp);
 }
 
+// El lector de texto (OCR) pesa unos 9 MB y no cambia: se baja la primera vez que se usa y
+// se queda guardado aunque la app se actualice.
+async function delOcr(peticion) {
+  const cache = await caches.open(CACHE_OCR);
+  const guardada = await cache.match(peticion, { ignoreSearch: true });
+  if (guardada) return conCabeceras(guardada);
+  const resp = await fetch(peticion);
+  if (resp.ok && peticion.method === "GET") await cache.put(peticion, resp.clone());
+  return conCabeceras(resp);
+}
+
 async function deLaApp(peticion) {
   // Primero la red (para recibir las actualizaciones), pero sin esperarla más de 3 s si ya
   // hay copia guardada: en redes que no llegan a GitHub Pages (algunas de datos móviles)
@@ -107,6 +119,7 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.endsWith("/lo/soffice.wasm")) return e.respondWith(deLibreOffice(e.request, "soffice.wasm"));
   if (url.pathname.endsWith("/lo/soffice.data")) return e.respondWith(deLibreOffice(e.request, "soffice.data"));
+  if (url.pathname.includes("/ocr/")) return e.respondWith(delOcr(e.request));
   if (url.pathname.includes("/lo/partes/")) return;      // los pedazos van directo a la red
   e.respondWith(deLaApp(e.request));
 });

@@ -25,3 +25,10 @@ de datos móviles que no llegan a GitHub Pages por IPv4).
 Lo hace [qpdf](https://github.com/qpdf/qpdf) 12.2.0 (Apache-2.0) compilado a WebAssembly, del paquete
 [`@neslinesli93/qpdf-wasm`](https://github.com/neslinesli93/qpdf-wasm) 0.3.1 (ISC): `lib/qpdf.js` y
 `lib/qpdf.wasm`, sin cambios. Cifra con AES de 256 bits.
+
+## Reconocer texto (OCR)
+
+[Tesseract.js](https://github.com/naptha/tesseract.js) 7.0.0 con `tesseract.js-core` 7.0.0 (Apache-2.0) y los
+idiomas español e inglés (`4.0.0_best_int` de `@tesseract.js-data`), todo en `ocr/` sin cambios. Se baja
+la primera vez que se usa (unos 9 MB) y `sw.js` lo guarda aparte, para que no se vuelva a bajar cuando
+la app se actualiza. El PDF original no se redibuja: solo se le escribe encima el texto, invisible.

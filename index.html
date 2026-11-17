@@ -106,6 +106,7 @@
       <li><a href="#marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 17.5l6-6M9 13.5l2-2M13 17.5l2-2"/></svg><b>Marca de agua</b><span>Texto, sello o logotipo encima</span></a></li>
       <li><a href="#proteger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><path d="M12 15v2"/></svg><b>Proteger PDF</b><span>Ponerle contraseña para abrirlo</span></a></li>
       <li><a href="#desbloquear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/><path d="M12 15v2"/></svg><b>Quitar contraseña</b><span>Desbloquear un PDF protegido</span></a></li>
+      <li><a href="#ocr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg><b>Reconocer texto</b><span>OCR de escaneos y fotos</span></a></li>
     </ul>
   </div>
 
@@ -510,10 +511,42 @@
     </section>
   </div>
 
+  <div id="vista-ocr" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Reconocer texto (OCR)</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaOcr" tabindex="0" role="button" aria-label="Elegir el PDF escaneado o las fotos">
+        <b>Elige o arrastra un PDF escaneado o fotos</b>
+        <span id="infoOcr">Sale un PDF donde ya se puede buscar y copiar el texto, y el texto aparte.</span>
+      </div>
+      <input type="file" id="archivosOcr" hidden multiple accept=".pdf,application/pdf,image/jpeg,image/png,image/webp">
+      <div id="opcionesOcr" hidden>
+        <div class="opciones">
+          <label class="campo">Idioma del documento
+            <select id="idiomaOcr">
+              <option value="spa+eng">Español e inglés</option>
+              <option value="spa">Solo español (más rápido)</option>
+              <option value="eng">Solo inglés (más rápido)</option>
+            </select>
+          </label>
+          <label class="campo" id="campoPaginasOcr">Páginas
+            <input type="text" id="paginasOcr" autocomplete="off" placeholder="Todas">
+          </label>
+        </div>
+        <div class="acciones">
+          <button id="botonOcr">Reconocer texto</button>
+          <p class="aviso" id="avisoOcr" aria-live="polite"></p>
+        </div>
+        <p class="aviso" style="margin-top:12px">La primera vez baja el lector de texto (unos 9 MB); después funciona sin internet. Lee mejor las hojas derechas, nítidas y con letra de imprenta; cada página tarda unos segundos.</p>
+      </div>
+      <ul class="filas" id="salidaOcr"></ul>
+    </section>
+  </div>
+
   <p class="pie">Usa LibreOffice compilado para el navegador
     (<a href="https://github.com/matbeedotcom/libreoffice-document-converter">libreoffice-document-converter</a>, licencia MPL-2.0).
     Para Office a PDF, la primera vez baja unos 77 MB; después funciona sin internet.
-    Las herramientas de PDF usan <a href="https://pdf-lib.js.org/">pdf-lib</a> (MIT), <a href="https://mozilla.github.io/pdf.js/">PDF.js</a> (Apache-2.0) y <a href="https://qpdf.sourceforge.io/">qpdf</a> (Apache-2.0) y no necesitan esa descarga.</p>
+    Las herramientas de PDF usan <a href="https://pdf-lib.js.org/">pdf-lib</a> (MIT), <a href="https://mozilla.github.io/pdf.js/">PDF.js</a> (Apache-2.0), <a href="https://qpdf.sourceforge.io/">qpdf</a> (Apache-2.0) y <a href="https://tesseract.projectnaptha.com/">Tesseract.js</a> (Apache-2.0) y no necesitan esa descarga.</p>
 </main>
 
 <script type="module">
@@ -882,7 +915,7 @@ async function iniciarOffice() {
 }
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear"];
+const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr"];
 function verVista() {
   let nombre = location.hash.slice(1) || "inicio";
   if (!VISTAS.includes(nombre)) nombre = "inicio";
@@ -1856,6 +1889,176 @@ $("botonQuitar").onclick = async () => {
     aviso("avisoQuitar", String(e && e.message || e), true);
   } finally {
     $("botonQuitar").disabled = false;
+  }
+};
+
+// ---------------------------------------------------------------- 14. reconocer texto (OCR)
+// Tesseract lee cada página (dibujada con PDF.js) y dice dónde está cada palabra. El PDF original no
+// se toca: solo se le escribe encima el mismo texto, invisible, para poder buscarlo y copiarlo.
+const esImagen = (f) => /^image\/(jpeg|png|webp)$/.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.name);
+let _tess = null;
+function tesseractListo() {
+  return _tess ||= new Promise((ok, mal) => {
+    const s = document.createElement("script");
+    s.src = new URL("ocr/tesseract.min.js", base).href;
+    s.onload = () => ok(window.Tesseract);
+    s.onerror = () => { _tess = null; mal(new Error("No se pudo cargar el lector de texto. Revisa tu internet.")); };
+    document.head.append(s);
+  });
+}
+async function lectorOcr(idioma, alAvanzar) {
+  const T = await tesseractListo(), carpeta = new URL("ocr", base).href;
+  try {
+    return await T.createWorker(idioma, 1, {
+      workerPath: carpeta + "/worker.min.js", corePath: carpeta, langPath: carpeta,
+      workerBlobURL: false, cacheMethod: "none", gzip: true,
+      logger: (m) => { if (m.status === "recognizing text") alAvanzar(m.progress); },
+      errorHandler: () => {},
+    });
+  } catch { throw new Error("No se pudo preparar el lector de texto. Revisa tu internet e intenta otra vez."); }
+}
+// Varias fotos → un PDF con una foto por hoja (el lado largo mide como una hoja carta)
+async function pdfDeImagenes(fs) {
+  const { PDFDocument } = await pdfLib(), doc = await PDFDocument.create();
+  for (const f of fs) {
+    const img = await imagenParaPdf(doc, f), k = 792 / Math.max(img.width, img.height);
+    doc.addPage([img.width * k, img.height * k]).drawImage(img, { x: 0, y: 0, width: img.width * k, height: img.height * k });
+  }
+  return doc.save();
+}
+// Lee las páginas «cuales» → por cada una { texto, palabras, esc } (palabras = null si ya traía texto)
+async function leerPaginas(bytes, cuales, idioma, avance) {
+  const pdfjs = await pdfJs();
+  const vista = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const cuantos = Math.min(cuales.length, navigator.hardwareConcurrency >= 4 ? 2 : 1);
+  const partes = new Array(cuantos).fill(0), paginas = new Array(cuales.length);
+  let sigue = 0, hechas = 0;
+  const avisar = () => avance(Math.min(cuales.length, hechas + partes.reduce((s, x) => s + x, 0)), cuales.length);
+  const lectores = [];
+  try {
+    avance(-1);
+    for (let n = 0; n < cuantos; n++) lectores.push(await lectorOcr(idioma, (x) => { partes[n] = x; avisar(); }));
+    avisar();
+    await Promise.all(lectores.map(async (lector, n) => {
+      for (let k; (k = sigue++) < cuales.length;) {
+        const pagina = await vista.getPage(cuales[k] + 1);
+        const propio = (await pagina.getTextContent()).items.map((x) => x.str + (x.hasEOL ? "\n" : " ")).join("").trim();
+        if (propio.replace(/\s/g, "").length > 30) paginas[k] = { texto: propio, palabras: null };
+        else {
+          const b = pagina.getViewport({ scale: 1 });
+          const esc = Math.min(200 / 72, 3000 / Math.max(b.width, b.height));
+          const v = pagina.getViewport({ scale: esc });
+          const lienzo = document.createElement("canvas");
+          lienzo.width = Math.round(v.width); lienzo.height = Math.round(v.height);
+          await pagina.render({ canvasContext: lienzo.getContext("2d"), viewport: v }).promise;
+          const { data } = await lector.recognize(lienzo, {}, { text: true, blocks: true });
+          lienzo.width = lienzo.height = 0;
+          // Solo cuentan las palabras de las que el lector está seguro (en texto de verdad pasa de 90;
+          // en fotos y manchas «ve» letras sueltas con 0 a 80), y una hoja sin tres palabras
+          // de verdad se toma como hoja sin texto
+          const letras = (w) => (w.text.match(/[\p{L}\p{N}]/gu) || []).length;
+          const palabras = [], parrafos = [];
+          for (const bl of data.blocks || []) for (const pa of bl.paragraphs) {
+            const renglones = [];
+            for (const li of pa.lines) {
+              const buenas = li.words.filter((w) => w.text.trim() && (w.confidence >= 75 || (w.confidence >= 50 && letras(w) >= 4)));
+              palabras.push(...buenas);
+              if (buenas.length) renglones.push(buenas.map((w) => w.text).join(" "));
+            }
+            if (renglones.length) parrafos.push(renglones.join("\n"));
+          }
+          const hay = palabras.filter((w) => letras(w) >= 3).length >= 3;
+          paginas[k] = { texto: hay ? parrafos.join("\n\n") : "", palabras: hay ? palabras : [], esc };
+        }
+        pagina.cleanup();
+        partes[n] = 0; hechas++; avisar();
+      }
+    }));
+    return paginas;
+  } finally {
+    for (const l of lectores) l.terminate().catch(() => {});
+    vista.destroy();
+  }
+}
+// Escribe las palabras, invisibles, en su lugar: cada una del ancho que ocupa en la hoja
+function capaDeTexto(L, doc, fuente, p, palabras, esc) {
+  const c = p.getCropBox(), r = giroDe(p), [, H] = tamVisible(p);
+  const t = r * Math.PI / 180, co = Math.round(Math.cos(t)), se = Math.round(Math.sin(t));
+  const ops = [L.pushGraphicsState(), L.beginText(), L.setTextRenderingMode(L.TextRenderingMode.Invisible)];
+  let clave = null;
+  for (const w of palabras) {
+    const texto = [...w.text].filter((ch) => { try { fuente.encodeText(ch); return true; } catch { return false; } }).join("").trim();
+    const ancho = (w.bbox.x1 - w.bbox.x0) / esc;
+    if (!texto || !(ancho > 0)) continue;
+    const size = Math.min(300, Math.max(1, ancho / fuente.widthOfTextAtSize(texto, 1)));
+    const vx = w.bbox.x0 / esc, vy = H - (w.baseline && w.baseline.y0 > 0 ? Math.max(w.baseline.y0, w.baseline.y1) : w.bbox.y1) / esc;
+    const [x, y] = r === 90 ? [c.x + c.width - vy, c.y + vx] : r === 180 ? [c.x + c.width - vx, c.y + c.height - vy]
+      : r === 270 ? [c.x + vy, c.y + c.height - vx] : [c.x + vx, c.y + vy];
+    clave ||= p.node.newFontDictionary("OCR", fuente.ref);
+    ops.push(L.setFontAndSize(clave, size), L.setTextMatrix(co, se, -se, co, x, y), L.showText(fuente.encodeText(texto + " ")));
+  }
+  if (!clave) return 0;
+  envolver(doc, p);
+  p.pushOperators(...ops, L.endText(), L.popGraphicsState());
+  return 1;
+}
+
+let paraOcr = null;      // { nombre, bytes, total, fotos }
+zonaDeArchivos($("zonaOcr"), $("archivosOcr"), async (fs) => {
+  const pdf = fs.find(esPdf), fotos = fs.filter(esImagen);
+  paraOcr = null;
+  $("opcionesOcr").hidden = true;
+  aviso("avisoOcr", "");
+  if (!pdf && !fotos.length) { $("infoOcr").textContent = "Elige un PDF o fotos (JPG, PNG o WebP)."; return; }
+  $("infoOcr").textContent = "Abriendo…";
+  try {
+    if (pdf) {
+      const doc = await abrirPdf(pdf);
+      paraOcr = { nombre: sinExt(pdf.name), bytes: new Uint8Array(await pdf.arrayBuffer()), total: doc.getPageCount(), fotos: false };
+      $("infoOcr").textContent = `${pdf.name} · ${paginasTxt(paraOcr.total)}`;
+    } else {
+      paraOcr = { nombre: fotos[0].name.replace(/\.[^.]+$/, ""), bytes: await pdfDeImagenes(fotos), total: fotos.length, fotos: true };
+      $("infoOcr").textContent = fotos.length === 1 ? fotos[0].name : `${fotos.length} fotos, una por página`;
+    }
+    $("campoPaginasOcr").hidden = paraOcr.fotos;
+    $("paginasOcr").value = "";
+    $("opcionesOcr").hidden = false;
+  } catch (e) {
+    paraOcr = null;
+    $("infoOcr").textContent = String(e && e.message || e);
+  }
+});
+$("botonOcr").onclick = async () => {
+  const a = paraOcr;
+  if (!a) return;
+  $("botonOcr").disabled = true;
+  try {
+    const cuales = enOrden(a.fotos ? "" : $("paginasOcr").value, a.total);
+    const paginas = await leerPaginas(a.bytes, cuales, $("idiomaOcr").value, (hechas, total) =>
+      aviso("avisoOcr", hechas < 0 ? "Preparando el lector de texto…"
+        : total === 1 ? `Leyendo… ${Math.round(hechas * 100)} %` : `Leyendo ${paginasTxt(total)}… ${Math.floor(hechas * 100 / total)} %`));
+    aviso("avisoOcr", "Armando el PDF…");
+    const L = await pdfLib(), doc = await L.PDFDocument.load(a.bytes);
+    const fuente = await doc.embedFont(L.StandardFonts.Helvetica);
+    let leidas = 0, yaTenian = 0;
+    paginas.forEach((x, k) => {
+      if (!x.palabras) yaTenian++;
+      else leidas += capaDeTexto(L, doc, fuente, doc.getPage(cuales[k]), x.palabras, x.esc);
+    });
+    const texto = paginas.map((x) => x.texto).filter(Boolean).join("\n\n");
+    if (!leidas && !yaTenian) throw new Error("No se encontró texto. Revisa que la hoja esté derecha y se lea bien.");
+    const sinTexto = paginas.length - leidas - yaTenian;
+    if (!leidas) aviso("avisoOcr", "Este PDF ya tenía texto que se puede buscar y copiar; no hizo falta leerlo. Abajo queda el texto.");
+    else {
+      filaDescarga($("salidaOcr"), await doc.save(), a.nombre + " (con texto).pdf",
+        `Texto reconocido en ${paginasTxt(leidas)}` + (yaTenian ? `; ${yaTenian === 1 ? "1 ya lo tenía" : yaTenian + " ya lo tenían"}` : "") + (sinTexto ? `; ${sinTexto} sin texto` : ""));
+      aviso("avisoOcr", "Listo.");
+    }
+    filaDescarga($("salidaOcr"), new TextEncoder().encode(texto.replace(/\n/g, "\r\n") + "\r\n"), a.nombre + ".txt", "Solo el texto", "text/plain;charset=utf-8");
+  } catch (e) {
+    aviso("avisoOcr", String(e && e.message || e), true);
+  } finally {
+    $("botonOcr").disabled = false;
   }
 };
 
