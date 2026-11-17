@@ -98,6 +98,7 @@
       <li><a href="#organizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1.3"/><rect x="14" y="3" width="7" height="8" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><path d="M15 16.5a3 3 0 1 1 1 3.4M15 20v-2.6h2.6"/></svg><b>Organizar páginas</b><span>Girar, quitar y reordenar</span></a></li>
       <li><a href="#imagenes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 18l5-5 3.5 3.5L16 13l5 5"/></svg><b>Imágenes a PDF</b><span>Fotos, capturas y escaneos</span></a></li>
       <li><a href="#aimagenes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h6l4 4v5H6z"/><path d="M12 3v4h4"/><rect x="8" y="14" width="13" height="7" rx="1.5"/><path d="M9 20l3.5-3 2.5 2 2-1.5 3 2.5"/></svg><b>PDF a imágenes</b><span>Cada página en JPG o PNG</span></a></li>
+      <li><a href="#comprimir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M13 9.5v3.5M11.3 11.3L13 13l1.7-1.7M13 19.5V16M11.3 17.7L13 16l1.7 1.7"/></svg><b>Comprimir PDF</b><span>Que pese menos para enviarlo</span></a></li>
     </ul>
   </div>
 
@@ -274,6 +275,31 @@
         </div>
       </div>
       <ul class="filas" id="salidaAImg"></ul>
+    </section>
+  </div>
+
+  <div id="vista-comprimir" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Comprimir PDF</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaComp" tabindex="0" role="button" aria-label="Elegir los PDF que se van a comprimir">
+        <b>Elige o arrastra uno o varios PDF</b>
+        <span>Se reduce el peso de las imágenes; el texto queda igual de nítido y se puede seguir seleccionando.</span>
+      </div>
+      <input type="file" id="archivosComp" multiple hidden accept=".pdf,application/pdf">
+      <ul class="filas" id="listaComp"></ul>
+      <fieldset class="modo">
+        <legend>Cuánto comprimir</legend>
+        <label><input type="radio" name="nivel" value="ligera"> Poco: las imágenes casi no cambian</label>
+        <label><input type="radio" name="nivel" value="media" checked> Recomendado: buen equilibrio</label>
+        <label><input type="radio" name="nivel" value="maxima"> Mucho: pesa lo menos posible, imágenes con menos detalle</label>
+      </fieldset>
+      <div class="acciones">
+        <button id="botonComp" disabled>Comprimir</button>
+        <button id="limpiarComp" class="secundario" hidden>Quitar todos</button>
+        <p class="aviso" id="avisoComp" aria-live="polite"></p>
+      </div>
+      <ul class="filas" id="salidaComp"></ul>
     </section>
   </div>
 
@@ -649,7 +675,7 @@ async function iniciarOffice() {
 }
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes"];
+const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir"];
 function verVista() {
   let nombre = location.hash.slice(1) || "inicio";
   if (!VISTAS.includes(nombre)) nombre = "inicio";
@@ -1148,6 +1174,184 @@ $("botonAImg").onclick = async () => {
   } finally {
     $("botonAImg").disabled = false;
   }
+};
+
+// ---------------------------------------------------------------- 11. comprimir PDF
+// Casi todo el peso de un PDF son sus imágenes. Aquí se vuelven a guardar como JPG con menos
+// calidad y, si traen más puntos de los que hacen falta, más chicas. El texto y los dibujos no
+// se tocan. Lo que no se sabe tratar con seguridad (CMYK, paletas, máscaras, 1 bit) se deja igual.
+const NIVELES = { ligera: { ppp: 220, calidad: 0.82 }, media: { ppp: 150, calidad: 0.68 }, maxima: { ppp: 96, calidad: 0.5 } };
+const tamTxt = (b) => b >= 1e6 ? (b / 1e6).toFixed(b >= 1e7 ? 0 : 1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+const porTubo = async (b, tubo) => new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(tubo)).arrayBuffer());
+
+// Deshace el «predictor» con que se guardan las imágenes sin pérdida (2 = TIFF, 10 o más = PNG)
+function sinPredictor(d, pred, colores, columnas) {
+  const fila = colores * columnas;
+  if (pred === 2) {
+    for (let s = 0; s + fila <= d.length; s += fila) for (let i = colores; i < fila; i++) d[s + i] += d[s + i - colores];
+    return d;
+  }
+  const filas = Math.floor(d.length / (fila + 1)), out = new Uint8Array(filas * fila);
+  for (let r = 0; r < filas; r++) {
+    const tipo = d[r * (fila + 1)], e = r * (fila + 1) + 1, s = r * fila;
+    for (let i = 0; i < fila; i++) {
+      const a = i >= colores ? out[s + i - colores] : 0, b = r ? out[s + i - fila] : 0, c = r && i >= colores ? out[s + i - fila - colores] : 0;
+      let p = 0;
+      if (tipo === 1) p = a;
+      else if (tipo === 2) p = b;
+      else if (tipo === 3) p = (a + b) >> 1;
+      else if (tipo === 4) { const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c); p = pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      out[s + i] = d[e + i] + p;
+    }
+  }
+  return out;
+}
+// Quita los datos de la cámara (Exif) de un JPG: el navegador giraría la imagen por ellos y el PDF no lo hace
+function sinExif(b) {
+  if (orientacionJpeg(b) === 1) return b;
+  const partes = [b.subarray(0, 2)];
+  let p = 2;
+  while (p + 4 < b.length && b[p] === 0xff && b[p + 1] !== 0xda) {
+    const largo = 2 + ((b[p + 2] << 8) | b[p + 3]);
+    if (!(b[p + 1] === 0xe1 && b[p + 4] === 0x45 && b[p + 5] === 0x78)) partes.push(b.subarray(p, p + largo));
+    p += largo;
+  }
+  partes.push(b.subarray(p));
+  const out = new Uint8Array(partes.reduce((n, x) => n + x.length, 0));
+  let q = 0;
+  for (const x of partes) { out.set(x, q); q += x.length; }
+  return out;
+}
+
+// Devuelve los bytes ahorrados (0 si la imagen se dejó como estaba)
+async function reducirImagen(L, ctx, ref, obj, nivel, ladoMax) {
+  const { PDFName, PDFArray, PDFRawStream } = L;
+  const nom = (s) => PDFName.of(s), d = obj.dict, ver = (k) => d.lookup(nom(k));
+  const num = (k) => { const x = ver(k); return x && typeof x.asNumber === "function" ? x.asNumber() : NaN; };
+  const w = num("Width"), h = num("Height");
+  if (!(w > 0 && h > 0) || num("BitsPerComponent") !== 8 || w * h < 10000 || obj.contents.length < 4096) return 0;
+  if (String(ver("ImageMask")) === "true" || ver("Mask") instanceof PDFArray) return 0;
+  if (ver("SMask")?.dict?.get(nom("Matte"))) return 0;
+  const dec = ver("Decode");
+  if (dec instanceof PDFArray) for (let i = 0; i < dec.size(); i++) if (dec.lookup(i).asNumber() !== i % 2) return 0;
+  // colores: solo gris o RGB
+  let cs = ver("ColorSpace"), n = 0;
+  if (cs instanceof PDFArray) {
+    const tipo = cs.lookup(0);
+    if (tipo === nom("ICCBased")) { const k = cs.lookup(1)?.dict?.lookup(nom("N"))?.asNumber(); n = k === 1 || k === 3 ? k : 0; }
+    else cs = tipo === nom("CalRGB") || tipo === nom("CalGray") ? tipo : null;
+  }
+  if (cs === nom("DeviceRGB") || cs === nom("CalRGB")) n = 3;
+  if (cs === nom("DeviceGray") || cs === nom("CalGray")) n = 1;
+  if (!n) return 0;
+  let filtro = ver("Filter"), parms = ver("DecodeParms");
+  if (filtro instanceof PDFArray) { if (filtro.size() !== 1) return 0; filtro = filtro.lookup(0); }
+  if (parms instanceof PDFArray) parms = parms.size() ? parms.lookup(0) : undefined;
+
+  const e = Math.min(1, ladoMax / Math.max(w, h));
+  const lienzo = document.createElement("canvas");
+  lienzo.width = Math.max(1, Math.round(w * e)); lienzo.height = Math.max(1, Math.round(h * e));
+  const c = lienzo.getContext("2d");
+  c.imageSmoothingQuality = "high";
+  let origen;
+  if (filtro === nom("DCTDecode")) {
+    origen = await createImageBitmap(new Blob([sinExif(obj.contents)], { type: "image/jpeg" }));
+    if (origen.width !== w || origen.height !== h) { origen.close(); return 0; }
+  } else if (filtro === nom("FlateDecode")) {
+    if (w * h > 40e6) return 0;
+    let crudo = await porTubo(obj.contents, new DecompressionStream("deflate"));
+    const pp = (k, def) => { const x = parms?.lookup?.(nom(k)); return x ? x.asNumber() : def; };
+    const pred = pp("Predictor", 1);
+    if (pred > 1) {
+      if (pp("Colors", 1) !== n || pp("Columns", 1) !== w || pp("BitsPerComponent", 8) !== 8) return 0;
+      crudo = sinPredictor(crudo, pred, n, w);
+    }
+    if (crudo.length < w * h * n) return 0;
+    const px = new Uint8ClampedArray(w * h * 4);
+    if (n === 3) for (let i = 0, j = 0; j < px.length; i += 3, j += 4) { px[j] = crudo[i]; px[j + 1] = crudo[i + 1]; px[j + 2] = crudo[i + 2]; px[j + 3] = 255; }
+    else for (let i = 0, j = 0; j < px.length; i++, j += 4) { px[j] = px[j + 1] = px[j + 2] = crudo[i]; px[j + 3] = 255; }
+    origen = document.createElement("canvas");
+    origen.width = w; origen.height = h;
+    origen.getContext("2d").putImageData(new ImageData(px, w, h), 0, 0);
+  } else return 0;
+  c.drawImage(origen, 0, 0, lienzo.width, lienzo.height);
+  origen.close?.();
+  const blob = await new Promise((ok) => lienzo.toBlob(ok, "image/jpeg", nivel.calidad));
+  if (!blob || blob.size >= obj.contents.length * 0.9) return 0;
+  const nuevos = new Uint8Array(await blob.arrayBuffer());
+  d.set(nom("Filter"), nom("DCTDecode"));
+  d.delete(nom("DecodeParms")); d.delete(nom("Decode"));
+  d.set(nom("ColorSpace"), nom("DeviceRGB"));
+  d.set(nom("Width"), ctx.obj(lienzo.width)); d.set(nom("Height"), ctx.obj(lienzo.height));
+  ctx.assign(ref, PDFRawStream.of(d, nuevos));
+  return obj.contents.length - nuevos.length;
+}
+
+async function comprimirPdf(f, nivel, avance) {
+  const L = await pdfLib(), { PDFName, PDFRawStream } = L;
+  const doc = await abrirPdf(f), ctx = doc.context, nom = (s) => PDFName.of(s);
+  const ladoMax = Math.max(...doc.getPages().map((p) => Math.max(p.getWidth(), p.getHeight())), 72) / 72 * nivel.ppp;
+  const flujos = ctx.enumerateIndirectObjects().filter(([, o]) => o instanceof PDFRawStream);
+  const imagenes = flujos.filter(([, o]) => o.dict.get(nom("Subtype")) === nom("Image"));
+  const mascaras = new Set(imagenes.flatMap(([, o]) => [o.dict.get(nom("SMask")), o.dict.get(nom("Mask"))]));
+  let cambiadas = 0;
+  for (const [k, [ref, obj]] of imagenes.entries()) {
+    avance(`imagen ${k + 1} de ${imagenes.length}`);
+    if (mascaras.has(ref)) continue;
+    try { if (await reducirImagen(L, ctx, ref, obj, nivel, ladoMax)) cambiadas++; }
+    catch (e) { console.warn("Una imagen se dejó como estaba", e); }
+  }
+  // Partes guardadas sin comprimir (pasa en PDF hechos por programas viejos)
+  for (const [ref, obj] of flujos) {
+    if (obj.dict.has(nom("Filter")) || obj.contents.length < 1024) continue;
+    const z = await porTubo(obj.contents, new CompressionStream("deflate"));
+    if (z.length >= obj.contents.length * 0.9) continue;
+    obj.dict.set(nom("Filter"), nom("FlateDecode"));
+    ctx.assign(ref, PDFRawStream.of(obj.dict, z));
+  }
+  avance("guardando");
+  return { bytes: await doc.save(), imagenes: imagenes.length, cambiadas };
+}
+
+const porComprimir = [];
+function pintarComp() {
+  const ul = $("listaComp");
+  ul.textContent = "";
+  porComprimir.forEach((f, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="nombre"><div></div><small></small></div><button class="chico" aria-label="Quitar">✕</button>`;
+    li.querySelector(".nombre div").textContent = f.name;
+    li.querySelector("small").textContent = tamTxt(f.size);
+    li.querySelector("button").onclick = () => { porComprimir.splice(i, 1); pintarComp(); };
+    ul.append(li);
+  });
+  $("botonComp").disabled = !porComprimir.length;
+  $("botonComp").textContent = porComprimir.length > 1 ? `Comprimir ${porComprimir.length} archivos` : "Comprimir";
+  $("limpiarComp").hidden = !porComprimir.length;
+}
+zonaDeArchivos($("zonaComp"), $("archivosComp"), (fs) => {
+  const buenos = fs.filter(esPdf);
+  porComprimir.push(...buenos);
+  pintarComp();
+  aviso("avisoComp", buenos.length < fs.length ? "Solo se agregan archivos PDF." : "", buenos.length < fs.length);
+});
+$("limpiarComp").onclick = () => { porComprimir.length = 0; pintarComp(); aviso("avisoComp", ""); };
+$("botonComp").onclick = async () => {
+  const nivel = NIVELES[document.querySelector('input[name="nivel"]:checked').value];
+  $("botonComp").disabled = true;
+  const notas = [];
+  let fallo = false;
+  for (const [i, f] of porComprimir.entries()) {
+    const cual = porComprimir.length > 1 ? `Archivo ${i + 1} de ${porComprimir.length}: ` : "Comprimiendo: ";
+    try {
+      const r = await comprimirPdf(f, nivel, (t) => aviso("avisoComp", cual + t + "…"));
+      const menos = Math.round((1 - r.bytes.length / f.size) * 100);
+      if (menos < 3) notas.push(`«${f.name}» ya no se puede reducir más${r.imagenes ? "" : " (no tiene imágenes)"}.`);
+      else filaDescarga($("salidaComp"), r.bytes, sinExt(f.name) + " (comprimido).pdf", `Antes ${tamTxt(f.size)}, ${menos} % menos`);
+    } catch (e) { fallo = true; notas.push(String(e && e.message || e)); }
+  }
+  aviso("avisoComp", notas.length ? notas.join(" ") : "Listo.", fallo);
+  $("botonComp").disabled = !porComprimir.length;
 };
 
 $("botonPreparar").onclick = () => preparar().catch(() => {});
