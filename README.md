@@ -39,3 +39,10 @@ La firma se dibuja en la página (con el dedo o el ratón) o se saca de una foto
 de fondo. PDF.js muestra la hoja para tocar el lugar, moverla y cambiarle el tamaño; pdf-lib la pega
 como imagen PNG transparente. Es una firma dibujada, no una firma electrónica con certificado. Si se
 pide, la firma se guarda solo en el navegador (`localStorage`).
+
+## Editar PDF
+
+Para escribir encima de un PDF (llenar un formato), poner palomitas y cruces, tapar con blanco,
+resaltar, y agregar líneas, rectángulos, óvalos e imágenes. PDF.js muestra la hoja y cada cosa se
+coloca tocándola; pdf-lib la dibuja en el mismo lugar. No cambia el texto que ya trae el PDF, y lo
+tapado con blanco sigue dentro del archivo.

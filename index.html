@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Convertidor a PDF</title>
-<meta name="description" content="Convierte Word, Excel y PowerPoint a PDF, une, divide, comprime, firma y protege tus PDF dentro del navegador, sin subir tus archivos.">
+<meta name="description" content="Convierte Word, Excel y PowerPoint a PDF, une, divide, comprime, edita, firma y protege tus PDF dentro del navegador, sin subir tus archivos.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icono.svg" type="image/svg+xml">
 <meta name="theme-color" content="#2A6478">
@@ -94,6 +94,27 @@
   .puesta img { display: block; width: 100%; pointer-events: none; }
   .puesta button { position: absolute; top: -15px; right: -15px; width: 30px; height: 30px; padding: 0; border-radius: 99px; background: var(--error); color: #fff; font-size: 14px; line-height: 1; }
   .puesta .asa { position: absolute; right: -14px; bottom: -14px; width: 28px; height: 28px; border-radius: 99px; background: var(--acento); border: 3px solid #fff; cursor: nwse-resize; touch-action: none; }
+  .herramientas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .herramientas button { padding: 8px 12px; background: var(--acento-claro); color: var(--acento); }
+  .herramientas button.armada { background: var(--acento); color: #fff; }
+  .marco { margin-top: 12px; overflow: auto; border: 1px solid var(--borde); }
+  .marco .mesa { margin-top: 0; border: 0; }
+  .objeto { position: absolute; box-sizing: border-box; outline: 1px dotted #7d9aa5; cursor: move; touch-action: none; }
+  .objeto::before { content: ""; position: absolute; inset: -7px; }
+  .objeto.elegido { outline: 2px dashed var(--acento); z-index: 2; }
+  .objeto > button, .objeto > .asa, .objeto > .agarre { display: none; }
+  .objeto.elegido > button, .objeto.elegido > .asa, .objeto.elegido > .agarre { display: block; }
+  .objeto > button { position: absolute; z-index: 3; top: -32px; right: -32px; width: 30px; height: 30px; padding: 0; border-radius: 99px; background: var(--error); color: #fff; font-size: 14px; line-height: 1; }
+  .objeto > .asa { position: absolute; z-index: 3; right: -30px; bottom: -30px; width: 28px; height: 28px; border-radius: 99px; background: var(--acento); border: 3px solid #fff; cursor: nwse-resize; touch-action: none; }
+  .objeto > .agarre { position: absolute; z-index: 3; left: -32px; top: -32px; width: 30px; height: 30px; border-radius: 99px; background: var(--acento); color: #fff; font-size: 16px; line-height: 30px; text-align: center; cursor: move; touch-action: none; }
+  .objeto.texto { cursor: text; touch-action: auto; }
+  .objeto .texto { position: relative; z-index: 1; min-width: 1.5em; min-height: 1.2em; line-height: 1.2; white-space: pre; font-family: Arial, Helvetica, "Liberation Sans", sans-serif; outline: none; user-select: text; -webkit-user-select: text; }
+  .objeto.imagen img { display: block; width: 100%; height: 100%; pointer-events: none; }
+  .objeto.ovalo { border-radius: 50%; }
+  .objeto.tapar { background: #fff; }
+  .objeto.resaltar { background: #ffe94d; mix-blend-mode: multiply; }
+  .objeto.linea i { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); }
+  .objeto svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -117,6 +138,7 @@
       <li><a href="#desbloquear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/><path d="M12 15v2"/></svg><b>Quitar contraseña</b><span>Desbloquear un PDF protegido</span></a></li>
       <li><a href="#ocr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg><b>Reconocer texto</b><span>OCR de escaneos y fotos</span></a></li>
       <li><a href="#firmar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5l5 5L9 20l-5.5.5L4 15z"/><path d="M12.5 6.5l5 5"/><path d="M13 20.5c1.5-1.5 2.5-1.5 3.5 0s2.5 1.5 4 0"/></svg><b>Firmar PDF</b><span>Dibuja tu firma y ponla en la hoja</span></a></li>
+      <li><a href="#editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9.5 11h5M12 11v6"/></svg><b>Editar PDF</b><span>Escribir, tapar, resaltar y poner imágenes</span></a></li>
     </ul>
   </div>
 
@@ -629,6 +651,83 @@
     </section>
   </div>
 
+  <div id="vista-editar" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Editar PDF</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaEd" tabindex="0" role="button" aria-label="Elegir el PDF que se va a editar">
+        <b>Elige o arrastra un PDF</b>
+        <span id="infoEd">Después escribes encima, tapas, resaltas o pones imágenes y formas.</span>
+      </div>
+      <input type="file" id="archivoEd" hidden accept=".pdf,application/pdf">
+      <div id="opcionesEd" hidden>
+        <p class="aviso" style="margin-top:14px">Elige qué quieres poner y toca la hoja en ese lugar. Lo que pongas se puede mover, cambiar de tamaño y quitar.</p>
+        <div class="herramientas" id="herrEd">
+          <button type="button" data-t="texto">Texto</button>
+          <button type="button" data-t="paloma">✓ Palomita</button>
+          <button type="button" data-t="cruz">✗ Cruz</button>
+          <button type="button" data-t="tapar">Tapar</button>
+          <button type="button" data-t="resaltar">Resaltar</button>
+          <button type="button" data-t="linea">Línea</button>
+          <button type="button" data-t="rect">Rectángulo</button>
+          <button type="button" data-t="ovalo">Óvalo</button>
+          <button type="button" data-t="imagen">Imagen</button>
+        </div>
+        <input type="file" id="imagenEd" hidden accept="image/*">
+        <div class="opciones">
+          <label class="campo">Color
+            <select id="colorEd">
+              <option value="#111111">Negro</option>
+              <option value="#14338f">Azul</option>
+              <option value="#c0201a">Rojo</option>
+              <option value="#1c7a3a">Verde</option>
+              <option value="#ffffff">Blanco</option>
+            </select>
+          </label>
+          <label class="campo">Tamaño de la letra
+            <select id="letraEd">
+              <option value="8">8 · muy chica</option>
+              <option value="10">10 · chica</option>
+              <option value="12" selected>12 · normal</option>
+              <option value="14">14</option>
+              <option value="18">18 · grande</option>
+              <option value="24">24</option>
+              <option value="36">36 · muy grande</option>
+            </select>
+          </label>
+          <label class="campo">Grosor de las líneas
+            <select id="grosorEd">
+              <option value="0.75">Fino</option>
+              <option value="1.5" selected>Normal</option>
+              <option value="3">Grueso</option>
+            </select>
+          </label>
+        </div>
+        <fieldset class="modo">
+          <label><input type="checkbox" id="negritaEd"> Letra negrita</label>
+        </fieldset>
+        <div class="acciones">
+          <button type="button" class="chico" id="antesEd" aria-label="Página anterior">‹</button>
+          <span id="paginaEd" style="font-weight:600"></span>
+          <button type="button" class="chico" id="despuesEd" aria-label="Página siguiente">›</button>
+        </div>
+        <div class="acciones">
+          <span style="font-weight:600">Acercar la hoja</span>
+          <button type="button" class="chico" id="menosEd" aria-label="Alejar la hoja">−</button>
+          <span id="zoomEd" class="aviso">100 %</span>
+          <button type="button" class="chico" id="masEd" aria-label="Acercar la hoja">+</button>
+        </div>
+        <div class="marco"><div class="mesa" id="mesaEd"><canvas></canvas></div></div>
+        <div class="acciones">
+          <button id="botonEd">Guardar PDF</button>
+          <p class="aviso" id="avisoEd" aria-live="polite"></p>
+        </div>
+        <p class="aviso" style="margin-top:12px">«Tapar» pone un recuadro blanco encima, pero lo tapado sigue dentro del archivo: sirve para corregir, no para esconder datos delicados. El texto se escribe con letras latinas (sin emojis). Tu archivo original no cambia.</p>
+      </div>
+      <ul class="filas" id="salidaEd"></ul>
+    </section>
+  </div>
+
   <p class="pie">Usa LibreOffice compilado para el navegador
     (<a href="https://github.com/matbeedotcom/libreoffice-document-converter">libreoffice-document-converter</a>, licencia MPL-2.0).
     Para Office a PDF, la primera vez baja unos 77 MB; después funciona sin internet.
@@ -1001,7 +1100,7 @@ async function iniciarOffice() {
 }
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr", "firmar"];
+const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr", "firmar", "editar"];
 function verVista() {
   let nombre = location.hash.slice(1) || "inicio";
   if (!VISTAS.includes(nombre)) nombre = "inicio";
@@ -2234,11 +2333,11 @@ const deLienzo = (c) => c ? { url: c.toDataURL("image/png"), w: c.width, h: c.he
 // Alto de una firma de ancho w, las dos medidas como fracción de la hoja que se está viendo
 const altoFirma = (w) => { const f = firmaActual(); return f && lienzoMesa.height ? w * f.h / f.w * lienzoMesa.width / lienzoMesa.height : 0; };
 
-function arrastrar(el, alEmpezar, alMover) {
+function arrastrar(el, alEmpezar, alMover, caja = mesa) {
   el.addEventListener("pointerdown", (e) => {
     if (e.target.closest("button") || (e.target !== el && e.target.classList.contains("asa"))) return;
     e.preventDefault();
-    const r = mesa.getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY, inicio = alEmpezar();
+    const r = caja.getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY, inicio = alEmpezar();
     el.setPointerCapture(e.pointerId);
     const mover = (ev) => alMover((ev.clientX - x0) / r.width, (ev.clientY - y0) / r.height, inicio);
     const fin = () => { el.removeEventListener("pointermove", mover); el.removeEventListener("pointerup", fin); el.removeEventListener("pointercancel", fin); };
@@ -2442,6 +2541,261 @@ $("botonFirma").onclick = async () => {
     aviso("avisoFirma", String(e && e.message || e), true);
   } finally {
     $("botonFirma").disabled = false;
+  }
+};
+
+// ---------------------------------------------------------------- 16. editar PDF
+// Cada cosa puesta sobre la hoja es un «objeto»: { t (qué es), i (página), x, y, w, h } con el lugar
+// y el tamaño como fracción de la hoja visible, más color, grosor (pt), letra (pt) o imagen. En
+// pantalla son elementos encima del dibujo de PDF.js (la variable --pt dice cuántos px mide un
+// punto); al guardar, pdf-lib dibuja lo mismo en el PDF.
+const mesaEd = $("mesaEd"), lienzoEd = mesaEd.querySelector("canvas");
+let paraEditar = null;                    // { f, vista, total, i, W, H } (W y H: la hoja en puntos)
+const objetos = [];
+let armada = null, elegido = null, imagenArmada = null, zoomEd = 1;
+const FORMAS = { rect: [150, 60], ovalo: [150, 60], tapar: [150, 18], resaltar: [150, 18], linea: [150, 14], paloma: [16, 16], cruz: [16, 16] };   // tamaño al ponerlas, en puntos
+const TRAZOS = { paloma: [[[5, 55], [38, 90], [95, 10]]], cruz: [[[8, 8], [92, 92]], [[92, 8], [8, 92]]] };      // en un cuadro de 100 × 100
+const CON_COLOR = ["texto", "rect", "ovalo", "linea", "paloma", "cruz"], CON_GROSOR = ["rect", "ovalo", "linea", "paloma", "cruz"];
+const NOMBRES = { texto: "el texto", paloma: "la palomita", cruz: "la cruz", tapar: "el recuadro blanco", resaltar: "el resaltado", linea: "la línea", rect: "el rectángulo", ovalo: "el óvalo", imagen: "la imagen" };
+// Un punto de la hoja como se ve (medido desde abajo a la izquierda) → sus coordenadas en el PDF
+function aPdf(p, vx, vy) {
+  const c = p.getCropBox(), r = giroDe(p);
+  return r === 90 ? [c.x + c.width - vy, c.y + vx] : r === 180 ? [c.x + c.width - vx, c.y + c.height - vy]
+    : r === 270 ? [c.x + vy, c.y + c.height - vx] : [c.x + vx, c.y + vy];
+}
+const lineasDe = (o) => { const l = o.texto.replace(/ |\t/g, " ").replace(/\r/g, "").split("\n"); while (l.length && !l[l.length - 1].trim()) l.pop(); return l; };
+
+function armar(t) {
+  armada = t;
+  for (const b of $("herrEd").children) b.classList.toggle("armada", b.dataset.t === t);
+  aviso("avisoEd", t ? `Toca la hoja donde va ${NOMBRES[t]}.` : "");
+}
+function elegir(o) {
+  for (const v of objetos.filter((v) => v.t === "texto" && v !== o && !v.texto.trim())) objetos.splice(objetos.indexOf(v), 1);   // textos que se quedaron vacíos
+  elegido = o;
+  for (const el of [...mesaEd.querySelectorAll(".objeto")]) {
+    if (!objetos.includes(el._o)) el.remove(); else el.classList.toggle("elegido", el._o === o);
+  }
+  if (!o) return;
+  if (CON_COLOR.includes(o.t)) $("colorEd").value = o.color;
+  if (CON_GROSOR.includes(o.t)) $("grosorEd").value = String(o.grosor);
+  if (o.t === "texto") { $("letraEd").value = String(o.size); $("negritaEd").checked = o.negrita; }
+}
+function crearObjeto(o) {
+  const a = paraEditar, el = document.createElement("div"), pt = (n) => `calc(var(--pt) * ${n})`;
+  el.className = `objeto ${o.t}` + (o === elegido ? " elegido" : "");
+  el._o = o;
+  const dentro = o.t === "texto" ? `<span class="agarre" aria-hidden="true">✥</span><div class="texto"></div>`
+    : o.t === "imagen" ? `<img alt="">` : o.t === "linea" ? `<i></i>`
+    : TRAZOS[o.t] ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" d="${TRAZOS[o.t].map((t) => "M" + t.map((q) => q.join(" ")).join("L")).join("")}"/></svg>` : "";
+  el.innerHTML = dentro + `<button type="button" aria-label="Quitar">✕</button>` + (o.t === "texto" ? "" : `<span class="asa"></span>`);
+  const acomodar = () => {
+    if (o.t === "texto") { o.x = entre(o.x, 0, 0.97); o.y = entre(o.y, 0, 0.97); }
+    else {
+      const fija = o.t === "imagen" ? o.img.h / o.img.w : TRAZOS[o.t] ? 1 : 0;     // alto ÷ ancho que no cambia
+      o.w = entre(o.w, 4 / a.W, 1);
+      if (fija) { o.h = o.w * fija * a.W / a.H; if (o.h > 1) { o.w /= o.h; o.h = 1; } }
+      else o.h = o.t === "linea" ? 14 / a.H : entre(o.h, 4 / a.H, 1);
+      o.x = entre(o.x, 0, 1 - o.w); o.y = entre(o.y, 0, 1 - o.h);
+      el.style.width = o.w * 100 + "%"; el.style.height = o.h * 100 + "%";
+    }
+    el.style.left = o.x * 100 + "%"; el.style.top = o.y * 100 + "%";
+  };
+  acomodar();
+  el.addEventListener("pointerdown", () => { if (elegido !== o) elegir(o); }, true);
+  const mover = (dx, dy, ini) => { o.x = ini.x + dx; o.y = ini.y + dy; acomodar(); };
+  if (o.t === "texto") {
+    const t = el.querySelector(".texto");
+    try { t.contentEditable = "plaintext-only"; } catch { t.contentEditable = "true"; }
+    t.spellcheck = false;
+    t.textContent = o.texto;
+    t.style.fontSize = pt(o.size); t.style.color = o.color; t.style.fontWeight = o.negrita ? "700" : "400";
+    t.oninput = () => { o.texto = t.innerText; };
+    arrastrar(el.querySelector(".agarre"), () => ({ x: o.x, y: o.y }), mover, mesaEd);
+  } else {
+    if (o.t === "imagen") el.querySelector("img").src = o.img.url;
+    if (o.t === "rect" || o.t === "ovalo") el.style.border = `${pt(o.grosor)} solid ${o.color}`;
+    if (o.t === "linea") { const i = el.querySelector("i"); i.style.height = pt(o.grosor); i.style.background = o.color; }
+    if (TRAZOS[o.t]) { const c = el.querySelector("path"); c.style.stroke = o.color; c.style.strokeWidth = pt(o.grosor); }
+    arrastrar(el, () => ({ x: o.x, y: o.y }), mover, mesaEd);
+    arrastrar(el.querySelector(".asa"), () => ({ w: o.w, h: o.h }), (dx, dy, ini) => { o.w = ini.w + dx; o.h = ini.h + dy; acomodar(); }, mesaEd);
+  }
+  el.querySelector("button").onclick = () => { objetos.splice(objetos.indexOf(o), 1); if (elegido === o) elegido = null; el.remove(); };
+  return el;
+}
+function pintarObjetos() {
+  for (const el of [...mesaEd.querySelectorAll(".objeto")]) el.remove();
+  const a = paraEditar;
+  if (!a || !a.W) return;
+  $("paginaEd").textContent = `Página ${a.i + 1} de ${a.total}`;
+  mesaEd.style.setProperty("--pt", mesaEd.clientWidth / a.W + "px");
+  for (const o of objetos.filter((o) => o.i === a.i)) mesaEd.append(crearObjeto(o));
+}
+new ResizeObserver(() => { if (paraEditar && paraEditar.W) mesaEd.style.setProperty("--pt", mesaEd.clientWidth / paraEditar.W + "px"); }).observe(mesaEd);
+let turnoEd = 0;
+async function pintarMesaEd() {
+  const a = paraEditar, turno = ++turnoEd;
+  if (!a) return;
+  $("antesEd").disabled = a.i === 0; $("despuesEd").disabled = a.i === a.total - 1;
+  const pagina = await a.vista.getPage(a.i + 1);
+  const b = pagina.getViewport({ scale: 1 });
+  const ancho = Math.min((mesaEd.clientWidth || 600) * Math.min(devicePixelRatio || 1, 2), 2400);
+  const v = pagina.getViewport({ scale: ancho / b.width });
+  const nuevo = document.createElement("canvas");
+  nuevo.width = Math.round(v.width); nuevo.height = Math.round(v.height);
+  await pagina.render({ canvasContext: nuevo.getContext("2d"), viewport: v }).promise;
+  if (turno !== turnoEd) return;
+  a.W = b.width; a.H = b.height;
+  lienzoEd.width = nuevo.width; lienzoEd.height = nuevo.height;
+  lienzoEd.getContext("2d").drawImage(nuevo, 0, 0);
+  pintarObjetos();
+}
+function irPaginaEd(i) { const a = paraEditar; if (!a || i < 0 || i >= a.total) return; elegir(null); a.i = i; pintarMesaEd(); }
+$("antesEd").onclick = () => irPaginaEd(paraEditar.i - 1);
+$("despuesEd").onclick = () => irPaginaEd(paraEditar.i + 1);
+function acercar(paso) {
+  const niveles = [1, 1.5, 2, 3];
+  zoomEd = niveles[entre(niveles.indexOf(zoomEd) + paso, 0, niveles.length - 1)];
+  mesaEd.style.width = zoomEd * 100 + "%";
+  $("zoomEd").textContent = zoomEd * 100 + " %";
+  pintarMesaEd();
+}
+$("menosEd").onclick = () => acercar(-1);
+$("masEd").onclick = () => acercar(1);
+
+zonaDeArchivos($("zonaEd"), $("archivoEd"), async (fs) => {
+  const f = fs.find(esPdf);
+  if (!f) { $("infoEd").textContent = "Ese archivo no es un PDF."; return; }
+  $("infoEd").textContent = "Abriendo…";
+  try {
+    const doc = await abrirPdf(f), pdfjs = await pdfJs();
+    const vista = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
+    if (paraEditar) paraEditar.vista.destroy();
+    paraEditar = { f, vista, total: doc.getPageCount(), i: 0, W: 0, H: 0 };
+    objetos.length = 0; elegido = null;
+    $("infoEd").textContent = `${f.name} · ${paginasTxt(paraEditar.total)}`;
+    $("opcionesEd").hidden = false;
+    armar(null);
+    await pintarMesaEd();
+  } catch (e) {
+    paraEditar = null;
+    $("opcionesEd").hidden = true;
+    $("infoEd").textContent = String(e && e.message || e);
+  }
+});
+for (const b of $("herrEd").children) b.onclick = () => {
+  const t = b.dataset.t;
+  if (armada === t) armar(null);
+  else if (t === "imagen") $("imagenEd").click();
+  else armar(t);
+};
+$("imagenEd").onchange = async (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  try {
+    const mapa = await createImageBitmap(f);
+    imagenArmada = { f, url: URL.createObjectURL(f), w: mapa.width, h: mapa.height };
+    mapa.close();
+    armar("imagen");
+  } catch { aviso("avisoEd", `«${f.name}» no se pudo abrir como imagen.`, true); }
+};
+lienzoEd.onclick = (e) => {
+  const a = paraEditar;
+  if (!a || !a.W) return;
+  if (!armada) {
+    if (elegido) elegir(null); else aviso("avisoEd", "Elige arriba qué quieres poner (texto, palomita, tapar…) y luego toca la hoja.");
+    return;
+  }
+  const r = lienzoEd.getBoundingClientRect(), tx = (e.clientX - r.left) / r.width, ty = (e.clientY - r.top) / r.height;
+  const o = { t: armada, i: a.i, color: $("colorEd").value, grosor: Number($("grosorEd").value) };
+  if (o.t === "texto") Object.assign(o, { texto: "", size: Number($("letraEd").value), negrita: $("negritaEd").checked, x: tx, y: ty - 0.6 * Number($("letraEd").value) / a.H, w: 0, h: 0 });
+  else {
+    if (o.t === "imagen") { o.img = imagenArmada; o.w = 0.3; o.h = o.w * o.img.h / o.img.w * a.W / a.H; if (o.h > 0.3) { o.w *= 0.3 / o.h; o.h = 0.3; } }
+    else { o.w = FORMAS[o.t][0] / a.W; o.h = FORMAS[o.t][1] / a.H; }
+    o.x = tx - o.w / 2; o.y = ty - o.h / 2;
+  }
+  objetos.push(o);
+  const el = crearObjeto(o);
+  mesaEd.append(el);
+  elegir(o);
+  aviso("avisoEd", "");
+  if (o.t === "texto") el.querySelector(".texto").focus();
+};
+// Cambiar una opción la aplica a lo que está elegido (y queda para lo siguiente que se ponga)
+function cambiarElegido(cambio, tipos) {
+  const o = elegido;
+  if (!o || !tipos.includes(o.t)) return;
+  cambio(o);
+  const viejo = [...mesaEd.querySelectorAll(".objeto")].find((el) => el._o === o);
+  if (viejo) viejo.replaceWith(crearObjeto(o));
+}
+$("colorEd").onchange = () => cambiarElegido((o) => { o.color = $("colorEd").value; }, CON_COLOR);
+$("grosorEd").onchange = () => cambiarElegido((o) => { o.grosor = Number($("grosorEd").value); }, CON_GROSOR);
+$("letraEd").onchange = () => cambiarElegido((o) => { o.size = Number($("letraEd").value); }, ["texto"]);
+$("negritaEd").onchange = () => cambiarElegido((o) => { o.negrita = $("negritaEd").checked; }, ["texto"]);
+addEventListener("keydown", (e) => {
+  if ((e.key !== "Delete" && e.key !== "Backspace") || !elegido || elegido.t === "texto" || $("vista-editar").hidden) return;
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement && document.activeElement.tagName || "")) return;
+  e.preventDefault();
+  objetos.splice(objetos.indexOf(elegido), 1);
+  elegir(null);
+});
+
+$("botonEd").onclick = async () => {
+  const a = paraEditar;
+  if (!a) return;
+  $("botonEd").disabled = true;
+  try {
+    const utiles = objetos.filter((o) => o.t !== "texto" || o.texto.trim());
+    if (!utiles.length) throw new Error("Todavía no has puesto nada en la hoja.");
+    aviso("avisoEd", "Guardando…");
+    const L = await pdfLib(), doc = await abrirPdf(a.f);
+    const fuentes = {}, imagenes = new Map(), envueltas = new Set();
+    const color = (h) => L.rgb(parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255);
+    for (const o of utiles) {
+      const p = doc.getPage(o.i), [W, H] = tamVisible(p), giro = L.degrees(giroDe(p));
+      if (!envueltas.has(o.i)) { envolver(doc, p); envueltas.add(o.i); }
+      const en = (vx, vy) => { const [x, y] = aPdf(p, vx, vy); return { x, y }; };
+      if (o.t === "texto") {
+        const fuente = fuentes[o.negrita] ||= await doc.embedFont(o.negrita ? L.StandardFonts.HelveticaBold : L.StandardFonts.Helvetica);
+        lineasDe(o).forEach((linea, k) => {
+          if (!linea.trim()) return;
+          medirTexto(fuente, linea, o.size);
+          // 0.945: de la orilla de arriba del renglón a la línea donde se apoyan las letras (interlínea de 1.2)
+          p.drawText(linea, { ...en(o.x * W, H - o.y * H - (0.945 + 1.2 * k) * o.size), size: o.size, font: fuente, color: color(o.color), rotate: giro });
+        });
+        continue;
+      }
+      let ancho = o.w * W, alto = o.h * H;
+      if (o.t === "imagen") {
+        if (!imagenes.has(o.img.f)) imagenes.set(o.img.f, await imagenParaPdf(doc, o.img.f));
+        alto = ancho * o.img.h / o.img.w;
+      } else if (TRAZOS[o.t]) alto = ancho;
+      const izq = o.x * W, abajo = H - o.y * H - alto, cx = izq + ancho / 2, cy = abajo + alto / 2, g = o.grosor;
+      if (o.t === "imagen") p.drawImage(imagenes.get(o.img.f), { ...colocar(L, p, cx, cy, ancho, alto, 0), width: ancho, height: alto });
+      else if (o.t === "tapar") p.drawRectangle({ ...colocar(L, p, cx, cy, ancho, alto, 0), width: ancho, height: alto, color: L.rgb(1, 1, 1) });
+      else if (o.t === "resaltar") p.drawRectangle({ ...colocar(L, p, cx, cy, ancho, alto, 0), width: ancho, height: alto, color: L.rgb(1, 0.914, 0.302), blendMode: L.BlendMode.Multiply });
+      else if (o.t === "rect") {
+        const w = Math.max(0.1, ancho - g), h = Math.max(0.1, alto - g);
+        p.drawRectangle({ ...colocar(L, p, cx, cy, w, h, 0), width: w, height: h, borderColor: color(o.color), borderWidth: g });
+      } else if (o.t === "ovalo") {
+        const rx = Math.max(0.1, (ancho - g) / 2), ry = Math.max(0.1, (alto - g) / 2), acostada = giroDe(p) % 180 !== 0;
+        p.drawEllipse({ ...en(cx, cy), xScale: acostada ? ry : rx, yScale: acostada ? rx : ry, borderColor: color(o.color), borderWidth: g });
+      } else if (o.t === "linea") p.drawLine({ start: en(izq, cy), end: en(izq + ancho, cy), thickness: g, color: color(o.color) });
+      else for (const t of TRAZOS[o.t]) for (let k = 1; k < t.length; k++) {
+        const punto = (q) => en(izq + q[0] / 100 * ancho, abajo + alto - q[1] / 100 * alto);
+        p.drawLine({ start: punto(t[k - 1]), end: punto(t[k]), thickness: g, color: color(o.color), lineCap: L.LineCapStyle.Round });
+      }
+    }
+    const bytes = await doc.save();
+    filaDescarga($("salidaEd"), bytes, sinExt(a.f.name) + " (editado).pdf", `${utiles.length === 1 ? "1 cambio" : utiles.length + " cambios"} en ${paginasTxt(envueltas.size)}`);
+    aviso("avisoEd", "Listo. Descarga el PDF aquí abajo; puedes seguir editando y guardar otra vez.");
+    $("salidaEd").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } catch (e) {
+    aviso("avisoEd", String(e && e.message || e), true);
+  } finally {
+    $("botonEd").disabled = false;
   }
 };
 
