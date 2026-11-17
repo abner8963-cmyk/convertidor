@@ -32,3 +32,10 @@ Lo hace [qpdf](https://github.com/qpdf/qpdf) 12.2.0 (Apache-2.0) compilado a Web
 idiomas español e inglés (`4.0.0_best_int` de `@tesseract.js-data`), todo en `ocr/` sin cambios. Se baja
 la primera vez que se usa (unos 9 MB) y `sw.js` lo guarda aparte, para que no se vuelva a bajar cuando
 la app se actualiza. El PDF original no se redibuja: solo se le escribe encima el texto, invisible.
+
+## Firmar PDF
+
+La firma se dibuja en la página (con el dedo o el ratón) o se saca de una foto, quitándole el papel
+de fondo. PDF.js muestra la hoja para tocar el lugar, moverla y cambiarle el tamaño; pdf-lib la pega
+como imagen PNG transparente. Es una firma dibujada, no una firma electrónica con certificado. Si se
+pide, la firma se guarda solo en el navegador (`localStorage`).

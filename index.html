@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Convertidor a PDF</title>
-<meta name="description" content="Convierte Word, Excel y PowerPoint a PDF dentro del navegador, sin subir tus archivos.">
+<meta name="description" content="Convierte Word, Excel y PowerPoint a PDF, une, divide, comprime, firma y protege tus PDF dentro del navegador, sin subir tus archivos.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icono.svg" type="image/svg+xml">
 <meta name="theme-color" content="#2A6478">
@@ -85,6 +85,15 @@
   .previa { margin-top: 16px; text-align: center; }
   .previa canvas { display: block; margin: 0 auto 6px; max-width: min(100%, 320px); height: auto; background: #fff; border: 1px solid var(--borde); }
   .previa small { color: var(--suave); }
+  .lienzo-firma { display: block; width: 100%; aspect-ratio: 600 / 220; margin-top: 10px; border: 1px solid var(--borde); border-radius: 10px; touch-action: none; cursor: crosshair;
+    background: linear-gradient(to top, transparent 24%, #c5d0d5 24%, #c5d0d5 calc(24% + 1px), transparent calc(24% + 1px)) #fff; }
+  .muestra-firma { display: block; max-width: 100%; max-height: 120px; margin-top: 10px; padding: 6px; background: #fff; border: 1px solid var(--borde); border-radius: 10px; }
+  .mesa { position: relative; margin-top: 12px; border: 1px solid var(--borde); line-height: 0; user-select: none; -webkit-user-select: none; }
+  .mesa canvas { display: block; width: 100%; height: auto; background: #fff; cursor: copy; }
+  .puesta { position: absolute; outline: 2px dashed var(--acento); cursor: move; touch-action: none; }
+  .puesta img { display: block; width: 100%; pointer-events: none; }
+  .puesta button { position: absolute; top: -15px; right: -15px; width: 30px; height: 30px; padding: 0; border-radius: 99px; background: var(--error); color: #fff; font-size: 14px; line-height: 1; }
+  .puesta .asa { position: absolute; right: -14px; bottom: -14px; width: 28px; height: 28px; border-radius: 99px; background: var(--acento); border: 3px solid #fff; cursor: nwse-resize; touch-action: none; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -107,6 +116,7 @@
       <li><a href="#proteger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><path d="M12 15v2"/></svg><b>Proteger PDF</b><span>Ponerle contraseña para abrirlo</span></a></li>
       <li><a href="#desbloquear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/><path d="M12 15v2"/></svg><b>Quitar contraseña</b><span>Desbloquear un PDF protegido</span></a></li>
       <li><a href="#ocr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg><b>Reconocer texto</b><span>OCR de escaneos y fotos</span></a></li>
+      <li><a href="#firmar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5l5 5L9 20l-5.5.5L4 15z"/><path d="M12.5 6.5l5 5"/><path d="M13 20.5c1.5-1.5 2.5-1.5 3.5 0s2.5 1.5 4 0"/></svg><b>Firmar PDF</b><span>Dibuja tu firma y ponla en la hoja</span></a></li>
     </ul>
   </div>
 
@@ -543,6 +553,82 @@
     </section>
   </div>
 
+  <div id="vista-firmar" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Firmar PDF</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaFirma" tabindex="0" role="button" aria-label="Elegir el PDF que se va a firmar">
+        <b>Elige o arrastra un PDF</b>
+        <span id="infoFirma">Después dibujas tu firma y tocas la hoja en el lugar donde va.</span>
+      </div>
+      <input type="file" id="archivoFirma" hidden accept=".pdf,application/pdf">
+      <div id="opcionesFirma" hidden>
+        <fieldset class="modo">
+          <legend>1. Tu firma</legend>
+          <label><input type="radio" name="tipoFirma" value="dibujo" checked> Dibujarla aquí (con el dedo o el ratón)</label>
+          <label><input type="radio" name="tipoFirma" value="imagen"> Usar una foto o imagen de mi firma</label>
+        </fieldset>
+        <div id="firmaDibujo">
+          <canvas class="lienzo-firma" id="lienzoFirma" width="1200" height="440" aria-label="Recuadro para dibujar la firma"></canvas>
+          <div class="opciones">
+            <label class="campo">Color de la tinta
+              <select id="colorFirma">
+                <option value="#111111">Negro</option>
+                <option value="#14338f" selected>Azul</option>
+              </select>
+            </label>
+            <label class="campo">Grosor del trazo
+              <select id="grosorFirma">
+                <option value="4">Fino</option>
+                <option value="7" selected>Normal</option>
+                <option value="11">Grueso</option>
+              </select>
+            </label>
+          </div>
+          <div class="acciones">
+            <button type="button" class="secundario" id="deshacerFirma">Deshacer el último trazo</button>
+            <button type="button" class="secundario" id="borrarFirma">Borrar</button>
+          </div>
+        </div>
+        <div id="firmaImagen" hidden>
+          <label class="campo">Imagen de la firma (foto, PNG o JPG)
+            <input type="file" id="imagenFirma" accept="image/*" style="display:block;margin-top:6px;font:inherit;max-width:100%">
+          </label>
+          <fieldset class="modo">
+            <label><input type="checkbox" id="fondoFirma" checked> Quitar el papel blanco de la foto (deja solo la tinta)</label>
+          </fieldset>
+          <p class="aviso" style="margin-top:8px">Sale mejor si en la foto solo se ve la firma sobre papel blanco, sin orillas ni sombras fuertes (recórtala antes si hace falta).</p>
+          <img class="muestra-firma" id="muestraFirma" alt="Tu firma" hidden>
+          <p class="aviso" id="notaImagenFirma" style="margin-top:8px"></p>
+        </div>
+        <fieldset class="modo">
+          <label><input type="checkbox" id="recordarFirma"> Guardar mi firma en este navegador para la próxima vez (no lo marques en una computadora compartida)</label>
+        </fieldset>
+
+        <fieldset class="modo">
+          <legend>2. Dónde va</legend>
+        </fieldset>
+        <p class="aviso">Toca la hoja en el lugar de la firma. Después arrástrala para moverla; el punto de la esquina la hace más grande o más chica.</p>
+        <div class="acciones">
+          <button type="button" class="chico" id="antesFirma" aria-label="Página anterior">‹</button>
+          <span id="paginaFirma" style="font-weight:600"></span>
+          <button type="button" class="chico" id="despuesFirma" aria-label="Página siguiente">›</button>
+        </div>
+        <div class="mesa" id="mesaFirma"><canvas></canvas></div>
+        <div class="acciones">
+          <button type="button" class="secundario" id="repetirFirma">Repetir en todas las páginas</button>
+          <p class="aviso" id="cuentaFirma"></p>
+        </div>
+        <div class="acciones">
+          <button id="botonFirma">Firmar PDF</button>
+          <p class="aviso" id="avisoFirma" aria-live="polite"></p>
+        </div>
+        <p class="aviso" style="margin-top:12px">Es una firma dibujada sobre la hoja, como la de pluma; no es una firma electrónica con certificado (e.firma). Tu archivo original no cambia.</p>
+      </div>
+      <ul class="filas" id="salidaFirma"></ul>
+    </section>
+  </div>
+
   <p class="pie">Usa LibreOffice compilado para el navegador
     (<a href="https://github.com/matbeedotcom/libreoffice-document-converter">libreoffice-document-converter</a>, licencia MPL-2.0).
     Para Office a PDF, la primera vez baja unos 77 MB; después funciona sin internet.
@@ -915,7 +1001,7 @@ async function iniciarOffice() {
 }
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr"];
+const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr", "firmar"];
 function verVista() {
   let nombre = location.hash.slice(1) || "inicio";
   if (!VISTAS.includes(nombre)) nombre = "inicio";
@@ -2060,6 +2146,302 @@ $("botonOcr").onclick = async () => {
     aviso("avisoOcr", String(e && e.message || e), true);
   } finally {
     $("botonOcr").disabled = false;
+  }
+};
+
+// ---------------------------------------------------------------- 15. firmar PDF
+// La firma es un PNG con fondo transparente (dibujado aquí o sacado de una foto). PDF.js muestra la
+// hoja; cada firma puesta guarda su lugar como fracción de la hoja visible (x, y de su esquina de
+// arriba a la izquierda y w de ancho), y pdf-lib la dibuja ahí con colocar().
+const entre = (v, a, b) => Math.min(Math.max(v, a), b);
+// Deja solo la parte del lienzo que tiene tinta (con un margen chico); null si está vacío
+function recortar(lienzo, umbral = 0) {
+  const { width: W, height: H } = lienzo, d = lienzo.getContext("2d").getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0, j = 3; y < H; y++) for (let x = 0; x < W; x++, j += 4) if (d[j] > umbral) {
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 < 0) return null;
+  x0 = Math.max(0, x0 - 4); y0 = Math.max(0, y0 - 4); x1 = Math.min(W - 1, x1 + 4); y1 = Math.min(H - 1, y1 + 4);
+  const r = document.createElement("canvas");
+  r.width = x1 - x0 + 1; r.height = y1 - y0 + 1;
+  r.getContext("2d").drawImage(lienzo, x0, y0, r.width, r.height, 0, 0, r.width, r.height);
+  return r;
+}
+// Foto de una firma → lienzo recortado. Con quitarFondo, el papel (lo claro) se vuelve transparente:
+// entre más oscuro que el papel es un punto, más tinta se le deja.
+async function firmaDeImagen(f, quitarFondo) {
+  let mapa;
+  try { mapa = await createImageBitmap(f, { imageOrientation: "from-image" }); }
+  catch { throw new Error(`«${f.name}» no se pudo abrir como imagen.`); }
+  const k = Math.min(1, 1000 / Math.max(mapa.width, mapa.height));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(mapa.width * k)); c.height = Math.max(1, Math.round(mapa.height * k));
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(mapa, 0, 0, c.width, c.height);
+  mapa.close();
+  if (quitarFondo) {
+    const img = ctx.getImageData(0, 0, c.width, c.height), d = img.data, n = d.length / 4;
+    const W = c.width, H = c.height, luz = new Uint8Array(n);
+    let conHuecos = 0;
+    for (let j = 0; j < n; j++) {
+      luz[j] = Math.round(0.299 * d[j * 4] + 0.587 * d[j * 4 + 1] + 0.114 * d[j * 4 + 2]);
+      if (d[j * 4 + 3] < 250) conHuecos++;
+    }
+    if (conHuecos < n * 0.02) {             // si ya trae fondo transparente se deja como está
+      // El papel no sale parejo en una foto (sombras, luz de lado): se mide por cuadros y cada
+      // punto se compara con el papel de su zona
+      const T = Math.max(16, Math.round(Math.max(W, H) / 40)), nx = Math.ceil(W / T), ny = Math.ceil(H / T);
+      const papel = new Float32Array(nx * ny), cuenta = new Uint32Array(256);
+      for (let ty = 0; ty < ny; ty++) for (let tx = 0; tx < nx; tx++) {
+        cuenta.fill(0);
+        const x1 = Math.min(W, (tx + 1) * T), y1 = Math.min(H, (ty + 1) * T);
+        for (let y = ty * T; y < y1; y++) for (let x = tx * T; x < x1; x++) cuenta[luz[y * W + x]]++;
+        const tope = (x1 - tx * T) * (y1 - ty * T) * 0.25;
+        let v = 255;
+        for (let suma = 0; v > 0; v--) { suma += cuenta[v]; if (suma >= tope) break; }
+        papel[ty * nx + tx] = v;
+      }
+      const suave = new Float32Array(nx * ny);       // promedio con los cuadros vecinos
+      for (let ty = 0; ty < ny; ty++) for (let tx = 0; tx < nx; tx++) {
+        let suma = 0, k = 0;
+        for (let b = Math.max(0, ty - 1); b <= Math.min(ny - 1, ty + 1); b++) for (let a = Math.max(0, tx - 1); a <= Math.min(nx - 1, tx + 1); a++) { suma += papel[b * nx + a]; k++; }
+        suave[ty * nx + tx] = suma / k;
+      }
+      for (let y = 0, j = 0; y < H; y++) {
+        const fy = entre(y / T - 0.5, 0, ny - 1), y0 = Math.floor(fy), y1 = Math.min(ny - 1, y0 + 1), py = fy - y0;
+        for (let x = 0; x < W; x++, j++) {
+          const fx = entre(x / T - 0.5, 0, nx - 1), x0 = Math.floor(fx), x1 = Math.min(nx - 1, x0 + 1), px = fx - x0;
+          const local = (suave[y0 * nx + x0] * (1 - px) + suave[y0 * nx + x1] * px) * (1 - py) + (suave[y1 * nx + x0] * (1 - px) + suave[y1 * nx + x1] * px) * py;
+          d[j * 4 + 3] = Math.round(d[j * 4 + 3] * entre((local - luz[j] - local * 0.12) / Math.max(1, local * 0.25), 0, 1));
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+  }
+  const r = recortar(c, 24);
+  if (!r) throw new Error("No se encontró la firma en esa imagen. Usa una foto de la firma sobre papel blanco.");
+  return r;
+}
+
+const firmas = { dibujo: null, imagen: null };      // cada una { url, w, h }
+let paraFirmar = null;                              // { f, vista, total, i }
+const puestas = [];                                 // { i, x, y, w }
+const tipoFirma = () => document.querySelector('input[name="tipoFirma"]:checked').value;
+const firmaActual = () => firmas[tipoFirma()];
+const mesa = $("mesaFirma"), lienzoMesa = mesa.querySelector("canvas");
+const deLienzo = (c) => c ? { url: c.toDataURL("image/png"), w: c.width, h: c.height } : null;
+// Alto de una firma de ancho w, las dos medidas como fracción de la hoja que se está viendo
+const altoFirma = (w) => { const f = firmaActual(); return f && lienzoMesa.height ? w * f.h / f.w * lienzoMesa.width / lienzoMesa.height : 0; };
+
+function arrastrar(el, alEmpezar, alMover) {
+  el.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button") || (e.target !== el && e.target.classList.contains("asa"))) return;
+    e.preventDefault();
+    const r = mesa.getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY, inicio = alEmpezar();
+    el.setPointerCapture(e.pointerId);
+    const mover = (ev) => alMover((ev.clientX - x0) / r.width, (ev.clientY - y0) / r.height, inicio);
+    const fin = () => { el.removeEventListener("pointermove", mover); el.removeEventListener("pointerup", fin); el.removeEventListener("pointercancel", fin); };
+    el.addEventListener("pointermove", mover); el.addEventListener("pointerup", fin); el.addEventListener("pointercancel", fin);
+  });
+}
+function pintarPuestas() {
+  for (const el of [...mesa.querySelectorAll(".puesta")]) el.remove();
+  const a = paraFirmar, f = firmaActual();
+  if (a) {
+    const con = new Set(puestas.map((q) => q.i)).size;
+    $("paginaFirma").textContent = `Página ${a.i + 1} de ${a.total}`;
+    $("cuentaFirma").textContent = con && f ? `Hay firma en ${paginasTxt(con)}.` : "";
+  }
+  if (!a || !f) return;
+  for (const q of puestas.filter((q) => q.i === a.i)) {
+    const el = document.createElement("div");
+    el.className = "puesta";
+    el.innerHTML = `<img alt="Firma"><button type="button" aria-label="Quitar esta firma">✕</button><span class="asa"></span>`;
+    el.querySelector("img").src = f.url;
+    const acomodar = () => {
+      q.w = entre(q.w, 0.03, 1);
+      if (altoFirma(q.w) > 1) q.w /= altoFirma(q.w);
+      q.x = entre(q.x, 0, 1 - q.w); q.y = entre(q.y, 0, 1 - altoFirma(q.w));
+      el.style.left = q.x * 100 + "%"; el.style.top = q.y * 100 + "%"; el.style.width = q.w * 100 + "%";
+    };
+    acomodar();
+    arrastrar(el, () => ({ x: q.x, y: q.y }), (dx, dy, ini) => { q.x = ini.x + dx; q.y = ini.y + dy; acomodar(); });
+    arrastrar(el.querySelector(".asa"), () => q.w, (dx, dy, w) => { q.w = Math.min(Math.max(0.03, w + dx), 1 - q.x); acomodar(); });
+    el.querySelector("button").onclick = () => { puestas.splice(puestas.indexOf(q), 1); pintarPuestas(); };
+    mesa.append(el);
+  }
+}
+let turnoMesa = 0;
+async function pintarMesa() {
+  const a = paraFirmar, turno = ++turnoMesa;
+  if (!a) return;
+  $("antesFirma").disabled = a.i === 0; $("despuesFirma").disabled = a.i === a.total - 1;
+  const pagina = await a.vista.getPage(a.i + 1);
+  const b = pagina.getViewport({ scale: 1 });
+  const ancho = Math.min((mesa.clientWidth || 600) * Math.min(devicePixelRatio || 1, 2), 1600);
+  const v = pagina.getViewport({ scale: ancho / b.width });
+  const nuevo = document.createElement("canvas");
+  nuevo.width = Math.round(v.width); nuevo.height = Math.round(v.height);
+  await pagina.render({ canvasContext: nuevo.getContext("2d"), viewport: v }).promise;
+  if (turno !== turnoMesa) return;              // ya se pidió otra página
+  lienzoMesa.width = nuevo.width; lienzoMesa.height = nuevo.height;
+  lienzoMesa.getContext("2d").drawImage(nuevo, 0, 0);
+  pintarPuestas();
+}
+
+zonaDeArchivos($("zonaFirma"), $("archivoFirma"), async (fs) => {
+  const f = fs.find(esPdf);
+  if (!f) { $("infoFirma").textContent = "Ese archivo no es un PDF."; return; }
+  $("infoFirma").textContent = "Abriendo…";
+  try {
+    const doc = await abrirPdf(f), pdfjs = await pdfJs();
+    const vista = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
+    if (paraFirmar) paraFirmar.vista.destroy();
+    paraFirmar = { f, vista, total: doc.getPageCount(), i: 0 };
+    puestas.length = 0;
+    $("infoFirma").textContent = `${f.name} · ${paginasTxt(paraFirmar.total)}`;
+    $("repetirFirma").hidden = paraFirmar.total === 1;
+    $("opcionesFirma").hidden = false;
+    aviso("avisoFirma", "");
+    await pintarMesa();
+  } catch (e) {
+    paraFirmar = null;
+    $("opcionesFirma").hidden = true;
+    $("infoFirma").textContent = String(e && e.message || e);
+  }
+});
+$("antesFirma").onclick = () => { if (paraFirmar && paraFirmar.i > 0) { paraFirmar.i--; pintarMesa(); } };
+$("despuesFirma").onclick = () => { if (paraFirmar && paraFirmar.i < paraFirmar.total - 1) { paraFirmar.i++; pintarMesa(); } };
+lienzoMesa.onclick = (e) => {
+  const a = paraFirmar;
+  if (!a) return;
+  if (!firmaActual()) { aviso("avisoFirma", tipoFirma() === "dibujo" ? "Primero dibuja tu firma en el recuadro de arriba." : "Primero elige la imagen de tu firma.", true); return; }
+  const r = lienzoMesa.getBoundingClientRect();
+  let w = 0.3;
+  if (altoFirma(w) > 0.2) w *= 0.2 / altoFirma(w);
+  puestas.push({ i: a.i, x: (e.clientX - r.left) / r.width - w / 2, y: (e.clientY - r.top) / r.height - altoFirma(w) / 2, w });
+  aviso("avisoFirma", "");
+  pintarPuestas();
+};
+$("repetirFirma").onclick = () => {
+  const a = paraFirmar, aqui = puestas.filter((q) => q.i === a.i);
+  if (!aqui.length) { aviso("avisoFirma", "Primero pon la firma en esta página; se copiará igual en las demás.", true); return; }
+  puestas.length = 0;
+  for (let i = 0; i < a.total; i++) for (const q of aqui) puestas.push({ ...q, i });
+  aviso("avisoFirma", `La firma quedó en las ${a.total} páginas, en el mismo lugar.`);
+  pintarPuestas();
+};
+
+// El recuadro para dibujar: se guardan los trazos para poder deshacer y cambiar color o grosor
+const lienzoFirma = $("lienzoFirma"), trazos = [];
+function trazar() {
+  const ctx = lienzoFirma.getContext("2d", { willReadFrequently: true }), grosor = Number($("grosorFirma").value);
+  ctx.clearRect(0, 0, lienzoFirma.width, lienzoFirma.height);
+  ctx.lineCap = ctx.lineJoin = "round"; ctx.lineWidth = grosor; ctx.strokeStyle = ctx.fillStyle = $("colorFirma").value;
+  for (const t of trazos) {
+    ctx.beginPath();
+    if (t.length === 1) { ctx.arc(t[0][0], t[0][1], grosor / 2, 0, 7); ctx.fill(); continue; }
+    ctx.moveTo(t[0][0], t[0][1]);
+    for (let k = 1; k < t.length; k++) ctx.quadraticCurveTo(t[k - 1][0], t[k - 1][1], (t[k - 1][0] + t[k][0]) / 2, (t[k - 1][1] + t[k][1]) / 2);
+    ctx.lineTo(t[t.length - 1][0], t[t.length - 1][1]);
+    ctx.stroke();
+  }
+}
+function firmaDibujada() {
+  trazar();
+  firmas.dibujo = trazos.length ? deLienzo(recortar(lienzoFirma)) : null;
+  pintarPuestas();
+}
+lienzoFirma.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  lienzoFirma.setPointerCapture(e.pointerId);
+  const r = lienzoFirma.getBoundingClientRect(), k = lienzoFirma.width / r.width, t = [];
+  const punto = (ev) => [(ev.clientX - r.left) * k, (ev.clientY - r.top) * k];
+  t.push(punto(e)); trazos.push(t); trazar();
+  const mover = (ev) => { for (const c of ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev]) t.push(punto(c)); trazar(); };
+  const fin = () => {
+    lienzoFirma.removeEventListener("pointermove", mover); lienzoFirma.removeEventListener("pointerup", fin); lienzoFirma.removeEventListener("pointercancel", fin);
+    firmaDibujada();
+  };
+  lienzoFirma.addEventListener("pointermove", mover); lienzoFirma.addEventListener("pointerup", fin); lienzoFirma.addEventListener("pointercancel", fin);
+});
+$("deshacerFirma").onclick = () => { trazos.pop(); firmaDibujada(); };
+$("borrarFirma").onclick = () => { trazos.length = 0; firmaDibujada(); };
+$("colorFirma").onchange = $("grosorFirma").onchange = firmaDibujada;
+
+// La firma desde una imagen (o la guardada de otra vez)
+let fotoFirma = null;
+function mostrarFirmaImagen(nota) {
+  const f = firmas.imagen;
+  $("muestraFirma").hidden = !f;
+  if (f) $("muestraFirma").src = f.url;
+  $("notaImagenFirma").classList.remove("error");
+  $("notaImagenFirma").textContent = nota;
+  pintarPuestas();
+}
+async function leerFotoFirma() {
+  if (!fotoFirma) return;
+  try {
+    firmas.imagen = deLienzo(await firmaDeImagen(fotoFirma, $("fondoFirma").checked));
+    mostrarFirmaImagen("Así se va a ver sobre la hoja.");
+  } catch (e) {
+    firmas.imagen = null;
+    mostrarFirmaImagen("");
+    aviso("notaImagenFirma", String(e && e.message || e), true);
+  }
+}
+$("imagenFirma").onchange = (e) => { fotoFirma = e.target.files[0] || null; leerFotoFirma(); };
+$("fondoFirma").onchange = leerFotoFirma;
+function verTipoFirma() {
+  const imagen = tipoFirma() === "imagen";
+  $("firmaDibujo").hidden = imagen; $("firmaImagen").hidden = !imagen;
+  pintarPuestas();
+}
+for (const r of document.querySelectorAll('input[name="tipoFirma"]')) r.onchange = verTipoFirma;
+try {
+  const g = JSON.parse(localStorage.getItem("firmaGuardada") || "null");
+  if (g && /^data:image\/png;base64,/.test(g.url) && g.w > 0 && g.h > 0) {
+    firmas.imagen = { url: g.url, w: g.w, h: g.h };
+    document.querySelector('input[name="tipoFirma"][value="imagen"]').checked = true;
+    $("recordarFirma").checked = true;
+    verTipoFirma();
+    mostrarFirmaImagen("Es la firma que guardaste en este navegador. Para cambiarla, elige otra imagen o dibújala de nuevo.");
+  }
+} catch { /* sin almacenamiento: no pasa nada */ }
+$("recordarFirma").onchange = () => { if (!$("recordarFirma").checked) try { localStorage.removeItem("firmaGuardada"); } catch {} };
+
+$("botonFirma").onclick = async () => {
+  const a = paraFirmar, f = firmaActual();
+  if (!a) return;
+  $("botonFirma").disabled = true;
+  try {
+    if (!f) throw new Error(tipoFirma() === "dibujo" ? "Primero dibuja tu firma en el recuadro de arriba." : "Primero elige la imagen de tu firma.");
+    if (!puestas.length) throw new Error("Toca la hoja en el lugar donde va la firma.");
+    aviso("avisoFirma", "Firmando…");
+    const L = await pdfLib(), doc = await abrirPdf(a.f);
+    const imagen = await doc.embedPng(Uint8Array.from(atob(f.url.split(",")[1]), (c) => c.charCodeAt(0)));
+    const envueltas = new Set();
+    for (const q of puestas) {
+      const p = doc.getPage(q.i), [W, H] = tamVisible(p);
+      let ancho = q.w * W, alto = ancho * f.h / f.w;
+      if (alto > H) { ancho *= H / alto; alto = H; }          // hojas de otro tamaño (al repetir en todas)
+      const x = entre(q.x * W, 0, W - ancho), y = entre(q.y * H, 0, H - alto);
+      if (!envueltas.has(q.i)) { envolver(doc, p); envueltas.add(q.i); }
+      p.drawImage(imagen, { ...colocar(L, p, x + ancho / 2, H - y - alto / 2, ancho, alto, 0), width: ancho, height: alto });
+    }
+    const bytes = await doc.save();
+    filaDescarga($("salidaFirma"), bytes, sinExt(a.f.name) + " (firmado).pdf", `Firma en ${paginasTxt(envueltas.size)}`);
+    try {
+      if ($("recordarFirma").checked) localStorage.setItem("firmaGuardada", JSON.stringify(f));
+      else localStorage.removeItem("firmaGuardada");
+    } catch { /* sin espacio o sin permiso: la firma solo no se guarda */ }
+    aviso("avisoFirma", "Listo. Descarga el PDF firmado aquí abajo.");
+    $("salidaFirma").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } catch (e) {
+    aviso("avisoFirma", String(e && e.message || e), true);
+  } finally {
+    $("botonFirma").disabled = false;
   }
 };
 
