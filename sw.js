@@ -7,7 +7,7 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "13";
+const VERSION = "14";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice
 const CACHE_OCR = "convertidor-ocr-7.0.0";        // cambia solo si cambia Tesseract o sus idiomas

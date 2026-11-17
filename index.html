@@ -2034,8 +2034,9 @@ $("botonOcr").onclick = async () => {
   $("botonOcr").disabled = true;
   try {
     const cuales = enOrden(a.fotos ? "" : $("paginasOcr").value, a.total);
+    aviso("avisoOcr", "Preparando el lector de texto (la primera vez tarda: baja unos 9 MB)…");
     const paginas = await leerPaginas(a.bytes, cuales, $("idiomaOcr").value, (hechas, total) =>
-      aviso("avisoOcr", hechas < 0 ? "Preparando el lector de texto…"
+      aviso("avisoOcr", hechas < 0 ? $("avisoOcr").textContent
         : total === 1 ? `Leyendo… ${Math.round(hechas * 100)} %` : `Leyendo ${paginasTxt(total)}… ${Math.floor(hechas * 100 / total)} %`));
     aviso("avisoOcr", "Armando el PDF…");
     const L = await pdfLib(), doc = await L.PDFDocument.load(a.bytes);
