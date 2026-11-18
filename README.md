@@ -46,3 +46,15 @@ Para escribir encima de un PDF (llenar un formato), poner palomitas y cruces, ta
 resaltar, y agregar líneas, rectángulos, óvalos e imágenes. PDF.js muestra la hoja y cada cosa se
 coloca tocándola; pdf-lib la dibuja en el mismo lugar. No cambia el texto que ya trae el PDF, y lo
 tapado con blanco sigue dentro del archivo.
+
+## Herramientas de imagen
+
+Comprimir, cambiar tamaño, recortar, convertir (JPG, PNG, WebP) y girar imágenes, sin librerías:
+el navegador abre la imagen con `createImageBitmap` (ya derecha, según la orientación EXIF de la
+cámara), un `canvas` la transforma y `toBlob` la guarda. Para achicar mucho se reduce a la mitad
+varias veces, que se ve mejor que de un solo golpe. Al comprimir, los PNG pasan a PNG de hasta 256
+colores (como TinyPNG): si la imagen ya tiene 256 colores o menos se guardan exactos; si no, se
+eligen por corte en la mediana con difuminado Floyd-Steinberg, conservando la transparencia, y el
+PNG se escribe a mano (zlib con `CompressionStream`). Volver a guardar una imagen le quita los datos
+de la cámara (fecha, ubicación). Las fotos HEIC de iPhone solo se abren donde el navegador las
+entiende (Safari).

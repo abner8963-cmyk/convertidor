@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Convertidor a PDF</title>
-<meta name="description" content="Convierte Word, Excel y PowerPoint a PDF, une, divide, comprime, edita, firma y protege tus PDF dentro del navegador, sin subir tus archivos.">
+<title>Convertidor</title>
+<meta name="description" content="Convierte Word, Excel y PowerPoint a PDF, une, divide, comprime, edita, firma y protege tus PDF, y comprime, recorta, gira y convierte imágenes, dentro del navegador y sin subir tus archivos.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icono.svg" type="image/svg+xml">
 <meta name="theme-color" content="#2A6478">
@@ -115,15 +115,35 @@
   .objeto.resaltar { background: #ffe94d; mix-blend-mode: multiply; }
   .objeto.linea i { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); }
   .objeto svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  h2.grupo { font-size: 15px; color: var(--suave); margin: 4px 0 10px; }
+  ul.imgs li { min-width: 0; cursor: default; }
+  .dato { width: 100%; min-width: 0; text-align: center; font-size: 12px; line-height: 1.35; }
+  .dato b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dato small { display: block; color: var(--suave); }
+  ul.imgs li.mala small { color: var(--error); }
+  ul.imgs li.mala img { opacity: .35; }
+  .marco-recorte { margin-top: 12px; text-align: center; line-height: 0; }
+  .mesa-recorte { position: relative; display: inline-block; max-width: 100%; user-select: none; -webkit-user-select: none; }
+  .mesa-recorte img { display: block; max-width: 100%; max-height: 70vh; min-width: 120px; background: repeating-conic-gradient(#ccd5d9 0 25%, #fff 0 50%) 0 0 / 16px 16px; }
+  .sombra { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .sombra div { position: absolute; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .55); }
+  .caja-recorte { position: absolute; outline: 2px solid #fff; box-shadow: 0 0 0 3px rgba(0, 0, 0, .35); cursor: move; touch-action: none;
+    background: linear-gradient(to right, transparent calc(33.3% - .5px), rgba(255,255,255,.6) calc(33.3% - .5px), rgba(255,255,255,.6) calc(33.3% + .5px), transparent calc(33.3% + .5px), transparent calc(66.6% - .5px), rgba(255,255,255,.6) calc(66.6% - .5px), rgba(255,255,255,.6) calc(66.6% + .5px), transparent calc(66.6% + .5px)),
+                linear-gradient(to bottom, transparent calc(33.3% - .5px), rgba(255,255,255,.6) calc(33.3% - .5px), rgba(255,255,255,.6) calc(33.3% + .5px), transparent calc(33.3% + .5px), transparent calc(66.6% - .5px), rgba(255,255,255,.6) calc(66.6% - .5px), rgba(255,255,255,.6) calc(66.6% + .5px), transparent calc(66.6% + .5px)); }
+  .caja-recorte .asa { position: absolute; width: 26px; height: 26px; border-radius: 99px; background: #fff; border: 3px solid var(--acento); touch-action: none; }
+  .caja-recorte .asa::before { content: ""; position: absolute; inset: -9px; }
+  .asa.nw { left: -13px; top: -13px; cursor: nwse-resize; } .asa.se { right: -13px; bottom: -13px; cursor: nwse-resize; }
+  .asa.ne { right: -13px; top: -13px; cursor: nesw-resize; } .asa.sw { left: -13px; bottom: -13px; cursor: nesw-resize; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
   <h1><img src="icono.svg" alt="">Convertidor</h1>
-  <p class="sub">Herramientas de PDF. Todo pasa en tu navegador: tus archivos no se suben a ningún lado.</p>
+  <p class="sub">Herramientas de PDF e imágenes. Todo pasa en tu navegador: tus archivos no se suben a ningún lado.</p>
 
   <div id="vista-inicio">
+    <h2 class="grupo">PDF</h2>
     <ul class="portada">
       <li><a href="#office"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h4"/></svg><b>Office a PDF</b><span>Word, Excel y PowerPoint</span></a></li>
       <li><a href="#unir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="11" rx="1.5"/><rect x="13" y="9" width="8" height="11" rx="1.5"/><path d="M11 9.5h2"/></svg><b>Unir PDF</b><span>Varios archivos en uno solo</span></a></li>
@@ -139,6 +159,14 @@
       <li><a href="#ocr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg><b>Reconocer texto</b><span>OCR de escaneos y fotos</span></a></li>
       <li><a href="#firmar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5l5 5L9 20l-5.5.5L4 15z"/><path d="M12.5 6.5l5 5"/><path d="M13 20.5c1.5-1.5 2.5-1.5 3.5 0s2.5 1.5 4 0"/></svg><b>Firmar PDF</b><span>Dibuja tu firma y ponla en la hoja</span></a></li>
       <li><a href="#editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9.5 11h5M12 11v6"/></svg><b>Editar PDF</b><span>Escribir, tapar, resaltar y poner imágenes</span></a></li>
+    </ul>
+    <h2 class="grupo">Imágenes</h2>
+    <ul class="portada">
+      <li><a href="#comprimir-imagen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8l3.5 3.5M10.5 8.5v3h-3M17 16l-3.5-3.5M13.5 15.5v-3h3"/></svg><b>Comprimir imagen</b><span>Que pese menos, sin cambiar el formato</span></a></li>
+      <li><a href="#cambiar-tamano"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="10" height="10" rx="1.5"/><path d="M14 3h7v7M21 3l-8 8"/></svg><b>Cambiar tamaño</b><span>En píxeles o por porcentaje</span></a></li>
+      <li><a href="#recortar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg><b>Recortar imagen</b><span>Quedarte solo con una parte</span></a></li>
+      <li><a href="#convertir-imagen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M14 5h3a2 2 0 0 1 2 2v3M17 8l2 2 2-2M10 19H7a2 2 0 0 1-2-2v-3M7 16l-2-2-2 2"/></svg><b>Convertir imagen</b><span>A JPG, PNG o WebP</span></a></li>
+      <li><a href="#girar-imagen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="10" width="11" height="11" rx="1.5"/><path d="M11 3.5h2.5a6 6 0 0 1 6 6V12M17 9.8l2.5 2.5 2.5-2.5"/></svg><b>Girar imagen</b><span>Enderezar fotos de lado o de cabeza</span></a></li>
     </ul>
   </div>
 
@@ -728,10 +756,164 @@
     </section>
   </div>
 
+  <div id="vista-comprimir-imagen" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Comprimir imagen</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaCI" tabindex="0" role="button" aria-label="Elegir las imágenes que se van a comprimir">
+        <b>Elige o arrastra tus imágenes</b>
+        <span>JPG, PNG o WebP. Siguen en el mismo formato, pero pesan menos.</span>
+      </div>
+      <input type="file" id="archivosCI" multiple hidden accept="image/*">
+      <ul class="paginas imgs" id="listaCI"></ul>
+      <fieldset class="modo">
+        <legend>Cuánto comprimir</legend>
+        <label><input type="radio" name="nivelCI" value="ligera"> Poco: casi no se nota la diferencia</label>
+        <label><input type="radio" name="nivelCI" value="media" checked> Recomendado: buen equilibrio</label>
+        <label><input type="radio" name="nivelCI" value="maxima"> Mucho: pesa lo menos posible; las fotos grandes se achican a 2048 px</label>
+      </fieldset>
+      <div class="acciones">
+        <button id="botonCI" disabled>Comprimir</button>
+        <button id="limpiarCI" class="secundario" hidden>Quitar todas</button>
+        <p class="aviso" id="avisoCI" aria-live="polite"></p>
+      </div>
+      <p class="aviso" style="margin-top:12px">Los PNG se guardan con hasta 256 colores (como hace TinyPNG) y conservan lo transparente. Al comprimir se quitan los datos de la cámara, como la fecha y la ubicación.</p>
+      <ul class="filas" id="salidaCI"></ul>
+    </section>
+  </div>
+
+  <div id="vista-cambiar-tamano" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Cambiar tamaño</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaTI" tabindex="0" role="button" aria-label="Elegir las imágenes a las que se les cambia el tamaño">
+        <b>Elige o arrastra tus imágenes</b>
+        <span>JPG, PNG o WebP. Debajo de cada una ves la medida que va a quedar.</span>
+      </div>
+      <input type="file" id="archivosTI" multiple hidden accept="image/*">
+      <ul class="paginas imgs" id="listaTI"></ul>
+      <div class="opciones">
+        <label class="campo">Cómo
+          <select id="modoTI">
+            <option value="medidas">Por medidas, en píxeles</option>
+            <option value="porcentaje">Por porcentaje</option>
+          </select>
+        </label>
+        <label class="campo" id="campoAnchoTI">Ancho (px)
+          <input type="number" id="anchoTI" min="1" max="20000" value="1280" inputmode="numeric" placeholder="Automático">
+        </label>
+        <label class="campo" id="campoAltoTI">Alto (px)
+          <input type="number" id="altoTI" min="1" max="20000" inputmode="numeric" placeholder="Automático">
+        </label>
+        <label class="campo" id="campoPorcTI" hidden>Porcentaje (%)
+          <input type="number" id="porcTI" min="1" max="400" value="50" inputmode="numeric">
+        </label>
+      </div>
+      <fieldset class="modo" id="casillasTI">
+        <label><input type="checkbox" id="propTI" checked> Mantener la proporción (que no se deforme)</label>
+        <label><input type="checkbox" id="noAgrandarTI" checked> No agrandar las que ya son más chicas</label>
+      </fieldset>
+      <div class="acciones">
+        <button id="botonTI" disabled>Cambiar tamaño</button>
+        <button id="limpiarTI" class="secundario" hidden>Quitar todas</button>
+        <p class="aviso" id="avisoTI" aria-live="polite"></p>
+      </div>
+      <ul class="filas" id="salidaTI"></ul>
+    </section>
+  </div>
+
+  <div id="vista-recortar" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Recortar imagen</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaRI" tabindex="0" role="button" aria-label="Elegir la imagen que se va a recortar">
+        <b>Elige o arrastra una imagen</b>
+        <span id="infoRI">Luego mueves el recuadro para dejar solo lo que quieres.</span>
+      </div>
+      <input type="file" id="archivoRI" hidden accept="image/*">
+      <div id="opcionesRI" hidden>
+        <div class="opciones">
+          <label class="campo">Forma del recorte
+            <select id="formaRI">
+              <option value="libre">Libre</option>
+              <option value="1:1">Cuadrada (1:1)</option>
+              <option value="4:3">Horizontal 4:3</option>
+              <option value="3:4">Vertical 3:4</option>
+              <option value="16:9">Horizontal 16:9 (pantalla)</option>
+              <option value="9:16">Vertical 9:16 (historias)</option>
+              <option value="3:2">Horizontal 3:2 (foto)</option>
+              <option value="2:3">Vertical 2:3 (foto)</option>
+            </select>
+          </label>
+        </div>
+        <p class="aviso" style="margin-top:12px">Arrastra el recuadro para moverlo y sus puntos para cambiarle el tamaño.</p>
+        <div class="marco-recorte"><div class="mesa-recorte" id="mesaRI"><img id="imgRI" alt="Imagen que se va a recortar"><div class="sombra"><div id="huecoRI"></div></div><div class="caja-recorte" id="cajaRI"><span class="asa nw" data-e="nw"></span><span class="asa ne" data-e="ne"></span><span class="asa sw" data-e="sw"></span><span class="asa se" data-e="se"></span></div></div></div>
+        <div class="acciones">
+          <button id="botonRI">Recortar</button>
+          <span id="medidaRI" style="font-weight:600"></span>
+          <p class="aviso" id="avisoRI" aria-live="polite"></p>
+        </div>
+      </div>
+      <ul class="filas" id="salidaRI"></ul>
+    </section>
+  </div>
+
+  <div id="vista-convertir-imagen" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Convertir imagen</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaVI" tabindex="0" role="button" aria-label="Elegir las imágenes que se van a convertir">
+        <b>Elige o arrastra tus imágenes</b>
+        <span>JPG, PNG, WebP, GIF o BMP.</span>
+      </div>
+      <input type="file" id="archivosVI" multiple hidden accept="image/*">
+      <ul class="paginas imgs" id="listaVI"></ul>
+      <div class="opciones">
+        <label class="campo">Convertir a
+          <select id="formatoVI">
+            <option value="jpg">JPG: fotos, pesa menos</option>
+            <option value="png">PNG: capturas y logotipos, sin pérdida y con transparencia</option>
+            <option value="webp">WebP: pesa poco, para páginas web</option>
+          </select>
+        </label>
+      </div>
+      <div class="acciones">
+        <button id="botonVI" disabled>Convertir</button>
+        <button id="limpiarVI" class="secundario" hidden>Quitar todas</button>
+        <p class="aviso" id="avisoVI" aria-live="polite"></p>
+      </div>
+      <p class="aviso" style="margin-top:12px">Al pasar a JPG, lo transparente queda blanco. De un GIF animado solo se queda el primer cuadro.</p>
+      <ul class="filas" id="salidaVI"></ul>
+    </section>
+  </div>
+
+  <div id="vista-girar-imagen" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Girar imagen</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaGI" tabindex="0" role="button" aria-label="Elegir las imágenes que se van a girar">
+        <b>Elige o arrastra tus imágenes</b>
+        <span>Luego gira cada una con ↺ y ↻, o todas juntas.</span>
+      </div>
+      <input type="file" id="archivosGI" multiple hidden accept="image/*">
+      <div class="acciones" id="todasGI" hidden>
+        <button class="secundario" id="todasIzqGI">↺ Girar todas</button>
+        <button class="secundario" id="todasDerGI">↻ Girar todas</button>
+      </div>
+      <ul class="paginas imgs" id="listaGI"></ul>
+      <div class="acciones">
+        <button id="botonGI" disabled>Guardar</button>
+        <button id="limpiarGI" class="secundario" hidden>Quitar todas</button>
+        <p class="aviso" id="avisoGI" aria-live="polite"></p>
+      </div>
+      <ul class="filas" id="salidaGI"></ul>
+    </section>
+  </div>
+
   <p class="pie">Usa LibreOffice compilado para el navegador
     (<a href="https://github.com/matbeedotcom/libreoffice-document-converter">libreoffice-document-converter</a>, licencia MPL-2.0).
     Para Office a PDF, la primera vez baja unos 77 MB; después funciona sin internet.
-    Las herramientas de PDF usan <a href="https://pdf-lib.js.org/">pdf-lib</a> (MIT), <a href="https://mozilla.github.io/pdf.js/">PDF.js</a> (Apache-2.0), <a href="https://qpdf.sourceforge.io/">qpdf</a> (Apache-2.0) y <a href="https://tesseract.projectnaptha.com/">Tesseract.js</a> (Apache-2.0) y no necesitan esa descarga.</p>
+    Las herramientas de PDF usan <a href="https://pdf-lib.js.org/">pdf-lib</a> (MIT), <a href="https://mozilla.github.io/pdf.js/">PDF.js</a> (Apache-2.0), <a href="https://qpdf.sourceforge.io/">qpdf</a> (Apache-2.0) y <a href="https://tesseract.projectnaptha.com/">Tesseract.js</a> (Apache-2.0) y no necesitan esa descarga. Las de imágenes usan solo el navegador.</p>
 </main>
 
 <script type="module">
@@ -1100,7 +1282,8 @@ async function iniciarOffice() {
 }
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr", "firmar", "editar"];
+const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr", "firmar", "editar",
+  "comprimir-imagen", "cambiar-tamano", "recortar", "convertir-imagen", "girar-imagen"];
 function verVista() {
   let nombre = location.hash.slice(1) || "inicio";
   if (!VISTAS.includes(nombre)) nombre = "inicio";
@@ -2797,6 +2980,451 @@ $("botonEd").onclick = async () => {
   } finally {
     $("botonEd").disabled = false;
   }
+};
+
+// ---------------------------------------------------------------- 17. herramientas de imagen
+// Todo con el propio navegador: createImageBitmap abre la imagen (ya derecha, según la orientación
+// que anotó la cámara), un canvas la gira, recorta o cambia de tamaño, y toBlob la guarda en JPG,
+// PNG o WebP. Al volver a guardarla se pierden los datos de la cámara (fecha, ubicación).
+const MIME = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
+const sabeWebp = (() => { const c = document.createElement("canvas"); c.width = c.height = 1; return c.toDataURL("image/webp").startsWith("data:image/webp"); })();
+const sinExtImg = (n) => n.replace(/\.[^.]+$/, "") || n;
+const pareceImagen = (f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i.test(f.name);
+const esHeic = (f) => /\.hei[cf]$/i.test(f.name) || /hei[cf]/.test(f.type);
+const pxTxt = (w, h) => `${w} × ${h} px`;
+async function formatoDe(f) {
+  const b = new Uint8Array(await f.slice(0, 12).arrayBuffer());
+  if (b[0] === 0xff && b[1] === 0xd8) return "jpg";
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e) return "png";
+  if (b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "webp";
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "gif";
+  if (b[0] === 0x42 && b[1] === 0x4d) return "bmp";
+  return "otro";            // AVIF, HEIC… cuando el navegador sabe abrirlos
+}
+// Formato de salida cuando no se pide otro: JPG, PNG y WebP siguen igual; GIF y BMP pasan a PNG; lo demás, a JPG
+const mismoFormato = (fmt) => fmt === "webp" ? (sabeWebp ? "webp" : "jpg") : fmt === "jpg" || fmt === "png" ? fmt : fmt === "gif" || fmt === "bmp" ? "png" : "jpg";
+async function abrirImagen(f) {
+  try { return await createImageBitmap(f, { imageOrientation: "from-image" }); }
+  catch {
+    throw new Error(esHeic(f) ? `«${f.name}» es HEIC (de iPhone) y este navegador no lo abre. En el iPhone: Ajustes → Cámara → Formatos → «Más compatible».`
+      : `«${f.name}» no se pudo abrir como imagen.`);
+  }
+}
+const lienzoNuevo = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+// La imagen girada (0, 90, 180 o 270 grados a la derecha) y recortada a r (en píxeles de la imagen derecha)
+function transformar(mapa, giro = 0, r = null) {
+  r ||= { x: 0, y: 0, w: mapa.width, h: mapa.height };
+  const deLado = giro % 180 !== 0, c = lienzoNuevo(deLado ? r.h : r.w, deLado ? r.w : r.h), ctx = c.getContext("2d");
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate(giro * Math.PI / 180);
+  ctx.drawImage(mapa, r.x, r.y, r.w, r.h, -r.w / 2, -r.h / 2, r.w, r.h);
+  return c;
+}
+// A otro tamaño. Para achicar mucho se va a la mitad varias veces: de un solo golpe salen dientes
+function escalar(fuente, W, H) {
+  let src = fuente;
+  while (src.width / 2 >= W && src.height / 2 >= H) {
+    const m = lienzoNuevo(Math.round(src.width / 2), Math.round(src.height / 2)), ctx = m.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(src, 0, 0, m.width, m.height);
+    if (src !== fuente) src.width = 0;           // suelta la memoria del paso anterior
+    src = m;
+  }
+  if (src.width === W && src.height === H) return src;
+  const c = lienzoNuevo(W, H), ctx = c.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(src, 0, 0, W, H);
+  if (src !== fuente) src.width = 0;
+  return c;
+}
+async function guardarImagen(c, fmt, calidad = 0.92) {
+  if (fmt === "jpg") {               // el JPG no tiene transparencia: lo transparente queda blanco
+    const ctx = c.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = "destination-over";
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.globalCompositeOperation = "source-over";
+  }
+  const blob = await new Promise((ok) => c.toBlob(ok, MIME[fmt], calidad));
+  if (!blob || !blob.size) throw new Error(`La imagen de ${pxTxt(c.width, c.height)} es demasiado grande para este navegador.`);
+  if (blob.type !== MIME[fmt]) throw new Error(`Este navegador no sabe guardar en ${fmt.toUpperCase()}.`);
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+// PNG de hasta 256 colores, como hacen TinyPNG o pngquant. Si la imagen ya tiene 256 colores o
+// menos (capturas sencillas, dibujos) se guardan exactos. Si no, se eligen por «corte en la
+// mediana» y el error de cada punto se reparte a sus vecinos (Floyd-Steinberg), para que los
+// degradados no salgan a rayas.
+function cuantizar(d, W, H, maxColores) {
+  const n = W * H, d32 = new Uint32Array(d.buffer, d.byteOffset, n);    // cada punto: R | G<<8 | B<<16 | A<<24
+  const exactos = new Map();
+  let caben = true;
+  for (let j = 0; j < n; j++) {
+    const v = d32[j] >>> 24 ? d32[j] : 0;        // todo lo transparente cuenta como un solo color
+    if (!exactos.has(v)) { if (exactos.size === 256) { caben = false; break; } exactos.set(v, exactos.size); }
+  }
+  if (caben) {
+    const paleta = new Uint8Array(exactos.size * 4), idx = new Uint8Array(n);
+    for (const [v, i] of exactos) { paleta[i * 4] = v & 255; paleta[i * 4 + 1] = (v >>> 8) & 255; paleta[i * 4 + 2] = (v >>> 16) & 255; paleta[i * 4 + 3] = v >>> 24; }
+    for (let j = 0; j < n; j++) idx[j] = exactos.get(d32[j] >>> 24 ? d32[j] : 0);
+    return { paleta, idx };
+  }
+  // Histograma: 5 bits por color y 4 para la transparencia, con la suma exacta para sacar promedios
+  const B = 1 << 19, cuenta = new Uint32Array(B), suma = new Float64Array(B * 4);
+  let transparentes = 0;
+  for (let i = 0; i < n * 4; i += 4) {
+    const a = d[i + 3];
+    if (!a) { transparentes++; continue; }
+    const k = (d[i] >> 3) << 14 | (d[i + 1] >> 3) << 9 | (d[i + 2] >> 3) << 4 | a >> 4;
+    cuenta[k]++; suma[k * 4] += d[i]; suma[k * 4 + 1] += d[i + 1]; suma[k * 4 + 2] += d[i + 2]; suma[k * 4 + 3] += a;
+  }
+  let m = 0;
+  for (let k = 0; k < B; k++) if (cuenta[k]) m++;
+  const cnt = new Float64Array(m), col = new Float32Array(m * 4);
+  for (let k = 0, q = 0; k < B; k++) if (cuenta[k]) { cnt[q] = cuenta[k]; for (let t = 0; t < 4; t++) col[q * 4 + t] = suma[k * 4 + t] / cuenta[k]; q++; }
+  const orden = new Uint32Array(m).map((_, i) => i);
+  const caja = (lo, hi) => {         // promedio, eje más disperso y error total de los colores orden[lo..hi)
+    let c = 0; const s = [0, 0, 0, 0], s2 = [0, 0, 0, 0];
+    for (let p = lo; p < hi; p++) { const q = orden[p], w = cnt[q]; c += w; for (let t = 0; t < 4; t++) { const v = col[q * 4 + t]; s[t] += w * v; s2[t] += w * v * v; } }
+    const media = s.map((v) => v / c), varz = s2.map((v, t) => Math.max(0, v / c - media[t] ** 2));
+    return { lo, hi, c, media, eje: varz.indexOf(Math.max(...varz)), error: hi - lo > 1 ? (varz[0] + varz[1] + varz[2] + varz[3]) * c : -1 };
+  };
+  const cajas = [caja(0, m)], lugares = maxColores - (transparentes ? 1 : 0);
+  while (cajas.length < lugares) {
+    let mejor = 0;
+    for (let i = 1; i < cajas.length; i++) if (cajas[i].error > cajas[mejor].error) mejor = i;
+    const b = cajas[mejor];
+    if (b.error <= 0) break;
+    const t = b.eje;
+    orden.subarray(b.lo, b.hi).sort((x, y) => col[x * 4 + t] - col[y * 4 + t]);
+    let acum = 0, corte = b.hi - 1;
+    for (let p = b.lo; p < b.hi - 1; p++) { acum += cnt[orden[p]]; if (acum >= b.c / 2) { corte = p + 1; break; } }
+    cajas.splice(mejor, 1, caja(b.lo, corte), caja(corte, b.hi));
+  }
+  const k = cajas.length, transparente = k, paleta = new Uint8Array((k + (transparentes ? 1 : 0)) * 4);    // el transparente va al final (0, 0, 0, 0)
+  cajas.forEach((b, i) => { for (let t = 0; t < 4; t++) paleta[i * 4 + t] = Math.round(b.media[t]); });
+  // Cada punto, al color más cercano de la paleta; se recuerda por cuadritos de color para no buscar siempre
+  const memoria = new Int16Array(1 << 22).fill(-1);
+  const cercano = (r, g, b, a) => {
+    const clave = (r >> 2) << 16 | (g >> 2) << 10 | (b >> 2) << 4 | a >> 4;
+    let i = memoria[clave];
+    if (i < 0) {
+      let menor = Infinity;
+      for (let p = 0; p < k; p++) {
+        const dr = paleta[p * 4] - r, dg = paleta[p * 4 + 1] - g, db = paleta[p * 4 + 2] - b, da = paleta[p * 4 + 3] - a;
+        const dist = dr * dr + dg * dg + db * db + da * da;
+        if (dist < menor) { menor = dist; i = p; }
+      }
+      memoria[clave] = i;
+    }
+    return i;
+  };
+  const idx = new Uint8Array(n), F = 0.8;       // F: cuánto error se reparte (como pngquant, no todo)
+  let esta = new Float32Array((W + 2) * 4), sig = new Float32Array((W + 2) * 4);
+  const a255 = (v) => v < 0 ? 0 : v > 255 ? 255 : v | 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const j = y * W + x, i = j * 4, e = (x + 1) * 4;
+      if (!d[i + 3]) { idx[j] = transparente; continue; }
+      // la transparencia también se reparte, pero solo entre puntos semitransparentes (lo opaco sigue opaco)
+      const r = a255(d[i] + esta[e]), g = a255(d[i + 1] + esta[e + 1]), b = a255(d[i + 2] + esta[e + 2]);
+      const a = d[i + 3] === 255 ? 255 : Math.max(1, a255(d[i + 3] + esta[e + 3]));
+      const p = cercano(r, g, b, a);
+      idx[j] = p;
+      const er = (r - paleta[p * 4]) * F, eg = (g - paleta[p * 4 + 1]) * F, eb = (b - paleta[p * 4 + 2]) * F, ea = d[i + 3] === 255 ? 0 : (a - paleta[p * 4 + 3]) * F;
+      esta[e + 4] += er * 0.4375; esta[e + 5] += eg * 0.4375; esta[e + 6] += eb * 0.4375; esta[e + 7] += ea * 0.4375;   // 7/16 a la derecha
+      sig[e - 4] += er * 0.1875; sig[e - 3] += eg * 0.1875; sig[e - 2] += eb * 0.1875; sig[e - 1] += ea * 0.1875;       // 3/16 abajo a la izquierda
+      sig[e] += er * 0.3125; sig[e + 1] += eg * 0.3125; sig[e + 2] += eb * 0.3125; sig[e + 3] += ea * 0.3125;           // 5/16 abajo
+      sig[e + 4] += er * 0.0625; sig[e + 5] += eg * 0.0625; sig[e + 6] += eb * 0.0625; sig[e + 7] += ea * 0.0625;       // 1/16 abajo a la derecha
+    }
+    [esta, sig] = [sig, esta];
+    sig.fill(0);
+  }
+  return { paleta, idx };
+}
+function trozoPng(tipo, datos) {
+  const out = new Uint8Array(12 + datos.length), v = new DataView(out.buffer);
+  v.setUint32(0, datos.length);
+  for (let i = 0; i < 4; i++) out[4 + i] = tipo.charCodeAt(i);
+  out.set(datos, 8);
+  v.setUint32(8 + datos.length, crc32(out.subarray(4, 8 + datos.length)));
+  return out;
+}
+async function png8(c, maxColores) {
+  const W = c.width, H = c.height, { paleta, idx } = cuantizar(c.getContext("2d").getImageData(0, 0, W, H).data, W, H, maxColores);
+  const k = paleta.length / 4;
+  // Los colores con transparencia van primero, para que la tabla tRNS sea corta
+  const orden = [...Array(k).keys()].sort((x, y) => (paleta[x * 4 + 3] === 255) - (paleta[y * 4 + 3] === 255));
+  const nuevo = new Uint8Array(k), plte = new Uint8Array(k * 3), trns = [];
+  orden.forEach((v, i) => { nuevo[v] = i; plte.set(paleta.subarray(v * 4, v * 4 + 3), i * 3); if (paleta[v * 4 + 3] < 255) trns.push(paleta[v * 4 + 3]); });
+  const crudo = new Uint8Array((W + 1) * H);          // cada renglón: filtro 0 y un byte por punto
+  for (let y = 0, j = 0; y < H; y++) { let q = y * (W + 1) + 1; for (let x = 0; x < W; x++) crudo[q++] = nuevo[idx[j++]]; }
+  const ihdr = new Uint8Array(13), v = new DataView(ihdr.buffer);
+  v.setUint32(0, W); v.setUint32(4, H); ihdr[8] = 8; ihdr[9] = 3;          // 8 bits, con paleta
+  const partes = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), trozoPng("IHDR", ihdr), trozoPng("PLTE", plte)];
+  if (trns.length) partes.push(trozoPng("tRNS", new Uint8Array(trns)));
+  partes.push(trozoPng("IDAT", await porTubo(crudo, new CompressionStream("deflate"))), trozoPng("IEND", new Uint8Array(0)));
+  return new Uint8Array(await new Blob(partes).arrayBuffer());
+}
+
+// Lista de imágenes con miniatura, para las herramientas que trabajan con varias a la vez
+// (s: el final de los id de esa vista; dato(x): el texto chico de cada una)
+function listaImagenes(s, { girar = false, dato = (x) => `${pxTxt(x.w, x.h)} · ${tamTxt(x.f.size)}`, alCambiar = () => {} } = {}) {
+  const items = [], ul = $("lista" + s);
+  const yo = {
+    items,
+    pintar() {
+      for (const x of items) {
+        x.li.querySelector("small").textContent = x.mala ? (esHeic(x.f) ? "HEIC: este navegador no lo abre" : "No se pudo abrir") : x.w ? dato(x) : "Abriendo…";
+        x.li.querySelector("img").style.transform = x.giro ? `rotate(${x.giro}deg)` : "";
+      }
+      $("boton" + s).disabled = !items.some((x) => !x.mala);
+      $("limpiar" + s).hidden = !items.length;
+      alCambiar();
+    },
+  };
+  zonaDeArchivos($("zona" + s), $("archivos" + s), (fs) => {
+    const buenas = fs.filter(pareceImagen);
+    for (const f of buenas) {
+      const x = { f, url: URL.createObjectURL(f), giro: 0, w: 0, h: 0, mala: false };
+      const li = x.li = document.createElement("li");
+      li.innerHTML = `<div class="hoja"><img alt="" decoding="async"></div><div class="dato"><b></b><small></small></div>
+        <div class="botones">${girar ? '<button data-a="izq" aria-label="Girar a la izquierda">↺</button><button data-a="der" aria-label="Girar a la derecha">↻</button>' : ""}<button data-a="quitar" aria-label="Quitar">✕</button></div>`;
+      li.title = f.name;
+      li.querySelector("b").textContent = f.name;
+      const img = li.querySelector("img");
+      img.onload = () => { x.w = img.naturalWidth; x.h = img.naturalHeight; yo.pintar(); };
+      img.onerror = () => { x.mala = true; li.classList.add("mala"); yo.pintar(); };
+      img.src = x.url;
+      li.onclick = (e) => {
+        const a = e.target.closest("button")?.dataset.a;
+        if (a === "izq" || a === "der") { x.giro = (x.giro + (a === "izq" ? 270 : 90)) % 360; aviso("aviso" + s, ""); }
+        else if (a === "quitar") { items.splice(items.indexOf(x), 1); li.remove(); URL.revokeObjectURL(x.url); }
+        else return;
+        yo.pintar();
+      };
+      items.push(x);
+      ul.append(li);
+    }
+    yo.pintar();
+    aviso("aviso" + s, buenas.length < fs.length ? "Solo se agregan imágenes." : "", buenas.length < fs.length);
+  });
+  $("limpiar" + s).onclick = () => {
+    for (const x of items) URL.revokeObjectURL(x.url);
+    items.length = 0; ul.textContent = ""; $("salida" + s).textContent = "";
+    yo.pintar(); aviso("aviso" + s, "");
+  };
+  return yo;
+}
+// Hace hacer(x) con cada imagen y entrega lo hecho: una fila por imagen (hasta 12) y, si son
+// varias, un .zip con todas. hacer devuelve { nombre, bytes, tipo, detalle }.
+async function procesarLista(s, lista, hacer, nombreZip, resumen = null) {
+  const boton = $("boton" + s), salida = $("salida" + s), buenas = lista.items.filter((x) => !x.mala);
+  const hechas = [], fallas = lista.items.filter((x) => x.mala).map((x) => `«${x.f.name}» no se pudo abrir.`), usados = new Set();
+  boton.disabled = true;
+  salida.textContent = "";
+  try {
+    for (const [k, x] of buenas.entries()) {
+      aviso("aviso" + s, buenas.length > 1 ? `Imagen ${k + 1} de ${buenas.length}…` : "Trabajando…");
+      await pintar();
+      try {
+        const h = await hacer(x);
+        let nombre = h.nombre, i = 2;
+        while (usados.has(nombre.toLowerCase())) nombre = h.nombre.replace(/(\.[^.]+)$/, ` (${i++})$1`);
+        usados.add(nombre.toLowerCase());
+        hechas.push({ ...h, nombre });
+      } catch (e) { fallas.push(String(e && e.message || e)); }
+    }
+    if (hechas.length <= 12) for (const h of [...hechas].reverse()) filaDescarga(salida, h.bytes, h.nombre, h.detalle, h.tipo);
+    if (hechas.length > 1) filaDescarga(salida, zipSimple(hechas), nombreZip, `${hechas.length} imágenes`, "application/zip");
+    const n = hechas.length;
+    const bien = !n ? "" : resumen ? resumen(hechas) : n === 1 ? "Listo." : `Listo: ${n} imágenes${n > 12 ? ", juntas en un .zip" : ""}.`;
+    aviso("aviso" + s, [bien, fallas.length ? `No se pudo con ${fallas.length === 1 ? "una" : fallas.length}: ${fallas.join(" ")}` : ""].filter(Boolean).join(" "), fallas.length > 0);
+    if (n) salida.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } finally {
+    boton.disabled = !lista.items.some((x) => !x.mala);
+  }
+}
+
+// ---- comprimir imagen
+const NIVELES_IMG = { ligera: { calidad: 0.85, colores: 256, lado: 0 }, media: { calidad: 0.72, colores: 192, lado: 0 }, maxima: { calidad: 0.55, colores: 96, lado: 2048 } };
+const listaCI = listaImagenes("CI");
+$("botonCI").onclick = () => {
+  const nivel = NIVELES_IMG[document.querySelector('input[name="nivelCI"]:checked').value];
+  let antes = 0, despues = 0;
+  procesarLista("CI", listaCI, async (x) => {
+    const fmt = mismoFormato(await formatoDe(x.f)), mapa = await abrirImagen(x.f);
+    let c = transformar(mapa);
+    mapa.close();
+    const e = nivel.lado ? Math.min(1, nivel.lado / Math.max(c.width, c.height)) : 1;
+    if (e < 1) c = escalar(c, Math.max(1, Math.round(c.width * e)), Math.max(1, Math.round(c.height * e)));
+    let bytes = fmt === "png" ? await png8(c, nivel.colores) : await guardarImagen(c, fmt, nivel.calidad);
+    const px = pxTxt(c.width, c.height);
+    c.width = 0;
+    const igual = e === 1 && bytes.length > x.f.size * 0.95;       // casi no bajó: se deja la original
+    if (igual) bytes = new Uint8Array(await x.f.arrayBuffer());
+    antes += x.f.size; despues += bytes.length;
+    return igual ? { nombre: x.f.name, bytes, tipo: x.f.type || MIME[fmt], detalle: "Ya estaba comprimida; se deja igual" }
+      : { nombre: `${sinExtImg(x.f.name)} (comprimida).${fmt}`, bytes, tipo: MIME[fmt], detalle: `${px} · antes ${tamTxt(x.f.size)}, ${Math.min(99, Math.round((1 - bytes.length / x.f.size) * 100))} % menos` };
+  }, "imágenes comprimidas.zip", () => `Listo: de ${tamTxt(antes)} a ${tamTxt(despues)} (${Math.max(0, Math.round((1 - despues / antes) * 100))} % menos).`);
+};
+
+// ---- cambiar tamaño
+function medidasTI(w, h) {
+  let W, H;
+  if ($("modoTI").value === "porcentaje") {
+    const p = Number($("porcTI").value) / 100;
+    if (!(p > 0)) return null;
+    W = w * p; H = h * p;
+  } else {
+    const a = Number($("anchoTI").value) || 0, b = Number($("altoTI").value) || 0, prop = $("propTI").checked;
+    if (a <= 0 && b <= 0) return null;
+    if (prop) { const e = Math.min(a > 0 ? a / w : Infinity, b > 0 ? b / h : Infinity); W = w * e; H = h * e; }
+    else { W = a > 0 ? a : w; H = b > 0 ? b : h; }
+    if ($("noAgrandarTI").checked && (W > w || H > h)) [W, H] = prop ? [w, h] : [Math.min(W, w), Math.min(H, h)];
+  }
+  return [Math.max(1, Math.round(W)), Math.max(1, Math.round(H))];
+}
+const listaTI = listaImagenes("TI", { dato: (x) => { const m = medidasTI(x.w, x.h); return m ? `${x.w}×${x.h} → ${m[0]}×${m[1]}` : pxTxt(x.w, x.h); } });
+function verModoTI() {
+  const pct = $("modoTI").value === "porcentaje";
+  $("campoPorcTI").hidden = !pct;
+  $("campoAnchoTI").hidden = $("campoAltoTI").hidden = $("casillasTI").hidden = pct;
+  listaTI.pintar();
+}
+$("modoTI").onchange = verModoTI;
+for (const id of ["anchoTI", "altoTI", "porcTI", "propTI", "noAgrandarTI"]) $(id).addEventListener("input", () => listaTI.pintar());
+$("botonTI").onclick = () => {
+  if (!medidasTI(100, 100)) { aviso("avisoTI", $("modoTI").value === "porcentaje" ? "Escribe el porcentaje." : "Escribe el ancho, el alto o los dos.", true); return; }
+  procesarLista("TI", listaTI, async (x) => {
+    const fmt = mismoFormato(await formatoDe(x.f)), mapa = await abrirImagen(x.f);
+    const [W, H] = medidasTI(mapa.width, mapa.height);
+    if (W * H > 1e8 || W > 30000 || H > 30000) { mapa.close(); throw new Error(`«${x.f.name}» quedaría de ${pxTxt(W, H)}: es demasiado grande.`); }
+    let c = transformar(mapa);
+    mapa.close();
+    c = escalar(c, W, H);
+    const bytes = await guardarImagen(c, fmt);
+    c.width = 0;
+    return { nombre: `${sinExtImg(x.f.name)} (${W}×${H}).${fmt}`, bytes, tipo: MIME[fmt], detalle: pxTxt(W, H) };
+  }, "imágenes (nuevo tamaño).zip");
+};
+
+// ---- recortar imagen
+// El recuadro se guarda como fracción de la imagen (x, y de su esquina de arriba a la izquierda)
+let paraRecortar = null;                        // { f, w, h, url } (w y h: la imagen derecha, en píxeles)
+const rec = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 }, MIN_REC = 0.03;
+function proporcionRI() {                        // ancho ÷ alto del recuadro, medidos en fracciones de la imagen (0 = libre)
+  const v = $("formaRI").value;
+  if (v === "libre" || !paraRecortar) return 0;
+  const [a, b] = v.split(":").map(Number);
+  return a / b * paraRecortar.h / paraRecortar.w;
+}
+function pintarRecorte() {
+  for (const el of [$("cajaRI"), $("huecoRI")]) Object.assign(el.style, { left: rec.x * 100 + "%", top: rec.y * 100 + "%", width: rec.w * 100 + "%", height: rec.h * 100 + "%" });
+  if (paraRecortar) $("medidaRI").textContent = pxTxt(Math.round(rec.w * paraRecortar.w), Math.round(rec.h * paraRecortar.h));
+}
+function recuadroInicial() {
+  const k = proporcionRI(), w = k ? Math.min(0.8, 0.8 * k) : 0.8, h = k ? w / k : 0.8;
+  Object.assign(rec, { w, h, x: (1 - w) / 2, y: (1 - h) / 2 });
+  pintarRecorte();
+}
+$("formaRI").onchange = recuadroInicial;
+arrastrar($("cajaRI"), () => ({ ...rec }), (dx, dy, ini) => {
+  rec.x = entre(ini.x + dx, 0, 1 - rec.w); rec.y = entre(ini.y + dy, 0, 1 - rec.h);
+  pintarRecorte();
+}, $("mesaRI"));
+for (const asa of $("cajaRI").querySelectorAll(".asa")) {
+  const izq = asa.dataset.e.includes("w"), arriba = asa.dataset.e.includes("n");
+  arrastrar(asa, () => ({ ...rec }), (dx, dy, ini) => {
+    const fx = izq ? ini.x + ini.w : ini.x, fy = arriba ? ini.y + ini.h : ini.y;      // la esquina contraria no se mueve
+    const maxW = izq ? fx : 1 - fx, maxH = arriba ? fy : 1 - fy, k = proporcionRI();
+    let w = izq ? ini.w - dx : ini.w + dx, h = arriba ? ini.h - dy : ini.h + dy;
+    if (k) {
+      if (Math.abs(w - ini.w) / ini.w >= Math.abs(h - ini.h) / ini.h) h = w / k; else w = h * k;    // manda el lado que más se movió
+      if (w < MIN_REC) { w = MIN_REC; h = w / k; }
+      if (h < MIN_REC) { h = MIN_REC; w = h * k; }
+      if (w > maxW) { w = maxW; h = w / k; }
+      if (h > maxH) { h = maxH; w = h * k; }
+    } else {
+      w = entre(w, MIN_REC, maxW); h = entre(h, MIN_REC, maxH);
+    }
+    Object.assign(rec, { w, h, x: izq ? fx - w : fx, y: arriba ? fy - h : fy });
+    pintarRecorte();
+  }, $("mesaRI"));
+}
+zonaDeArchivos($("zonaRI"), $("archivoRI"), async (fs) => {
+  const f = fs.find(pareceImagen);
+  if (!f) { $("infoRI").textContent = "Ese archivo no es una imagen."; return; }
+  $("infoRI").textContent = "Abriendo…";
+  try {
+    const mapa = await abrirImagen(f), w = mapa.width, h = mapa.height;
+    mapa.close();
+    if (paraRecortar) URL.revokeObjectURL(paraRecortar.url);
+    paraRecortar = { f, w, h, url: URL.createObjectURL(f) };
+    $("imgRI").src = paraRecortar.url;
+    await $("imgRI").decode().catch(() => {});
+    $("infoRI").textContent = `${f.name} · ${pxTxt(w, h)}`;
+    $("opcionesRI").hidden = false;
+    aviso("avisoRI", "");
+    recuadroInicial();
+  } catch (e) {
+    paraRecortar = null;
+    $("opcionesRI").hidden = true;
+    $("infoRI").textContent = String(e && e.message || e);
+  }
+});
+$("botonRI").onclick = async () => {
+  const a = paraRecortar;
+  if (!a) return;
+  $("botonRI").disabled = true;
+  try {
+    aviso("avisoRI", "Recortando…");
+    await pintar();
+    const fmt = mismoFormato(await formatoDe(a.f)), mapa = await abrirImagen(a.f);
+    const x = Math.round(rec.x * mapa.width), y = Math.round(rec.y * mapa.height);
+    const r = { x, y, w: entre(Math.round(rec.w * mapa.width), 1, mapa.width - x), h: entre(Math.round(rec.h * mapa.height), 1, mapa.height - y) };
+    const c = transformar(mapa, 0, r);
+    mapa.close();
+    const bytes = await guardarImagen(c, fmt);
+    c.width = 0;
+    filaDescarga($("salidaRI"), bytes, `${sinExtImg(a.f.name)} (recortada).${fmt}`, pxTxt(r.w, r.h), MIME[fmt]);
+    aviso("avisoRI", "Listo. Puedes mover el recuadro y recortar otra vez.");
+    $("salidaRI").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } catch (e) {
+    aviso("avisoRI", String(e && e.message || e), true);
+  } finally {
+    $("botonRI").disabled = false;
+  }
+};
+
+// ---- convertir imagen
+if (!sabeWebp) { const o = $("formatoVI").querySelector('[value="webp"]'); o.disabled = true; o.textContent += " (no en este navegador)"; }
+const listaVI = listaImagenes("VI");
+$("botonVI").onclick = () => {
+  const fmt = $("formatoVI").value;
+  procesarLista("VI", listaVI, async (x) => {
+    const mapa = await abrirImagen(x.f), c = transformar(mapa);
+    mapa.close();
+    const bytes = await guardarImagen(c, fmt), px = pxTxt(c.width, c.height);
+    c.width = 0;
+    return { nombre: `${sinExtImg(x.f.name)}.${fmt}`, bytes, tipo: MIME[fmt], detalle: px };
+  }, `imágenes en ${fmt.toUpperCase()}.zip`);
+};
+
+// ---- girar imagen
+const LADOS = { 90: "a la derecha", 180: "de cabeza", 270: "a la izquierda" };
+const listaGI = listaImagenes("GI", { girar: true, dato: (x) => x.giro ? `Girada ${LADOS[x.giro]}` : pxTxt(x.w, x.h), alCambiar: () => { $("todasGI").hidden = !listaGI.items.length; } });
+for (const [id, paso] of [["todasIzqGI", 270], ["todasDerGI", 90]]) $(id).onclick = () => { for (const x of listaGI.items) x.giro = (x.giro + paso) % 360; listaGI.pintar(); aviso("avisoGI", ""); };
+$("botonGI").onclick = () => {
+  if (!listaGI.items.some((x) => x.giro && !x.mala)) { aviso("avisoGI", "Primero gira al menos una imagen con ↺ o ↻.", true); return; }
+  procesarLista("GI", listaGI, async (x) => {
+    if (!x.giro) return { nombre: x.f.name, bytes: new Uint8Array(await x.f.arrayBuffer()), tipo: x.f.type, detalle: "Sin cambios" };
+    const fmt = mismoFormato(await formatoDe(x.f)), mapa = await abrirImagen(x.f), c = transformar(mapa, x.giro);
+    mapa.close();
+    const bytes = await guardarImagen(c, fmt), px = pxTxt(c.width, c.height);
+    c.width = 0;
+    return { nombre: `${sinExtImg(x.f.name)} (girada).${fmt}`, bytes, tipo: MIME[fmt], detalle: `${px} · girada ${LADOS[x.giro]}` };
+  }, "imágenes giradas.zip");
 };
 
 $("botonPreparar").onclick = () => preparar().catch(() => {});
