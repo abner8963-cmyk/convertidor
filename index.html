@@ -2323,6 +2323,8 @@ async function leerPaginas(bytes, cuales, idioma, avance) {
           lienzo.width = Math.round(v.width); lienzo.height = Math.round(v.height);
           await pagina.render({ canvasContext: lienzo.getContext("2d"), viewport: v }).promise;
           const { data } = await lector.recognize(lienzo, {}, { text: true, blocks: true });
+          // Si traía texto roto, la hoja se cambiará por su imagen (así ya no se copia la basura)
+          const foto = lleno.length > 30 ? new Uint8Array(await (await new Promise((ok) => lienzo.toBlob(ok, "image/jpeg", 0.8))).arrayBuffer()) : null;
           lienzo.width = lienzo.height = 0;
           // Solo cuentan las palabras de las que el lector está seguro (en texto de verdad pasa de 90;
           // en fotos y manchas «ve» letras sueltas con 0 a 80), y una hoja sin tres palabras
@@ -2339,7 +2341,7 @@ async function leerPaginas(bytes, cuales, idioma, avance) {
             if (renglones.length) parrafos.push(renglones.join("\n"));
           }
           const hay = palabras.filter((w) => letras(w) >= 3).length >= 3;
-          paginas[k] = { texto: hay ? parrafos.join("\n\n") : "", palabras: hay ? palabras : [], esc };
+          paginas[k] = { texto: hay ? parrafos.join("\n\n") : "", palabras: hay ? palabras : [], esc, foto: hay ? foto : null };
         }
         pagina.cleanup();
         partes[n] = 0; hechas++; avisar();
@@ -2412,18 +2414,28 @@ $("botonOcr").onclick = async () => {
     aviso("avisoOcr", "Armando el PDF…");
     const L = await pdfLib(), doc = await L.PDFDocument.load(a.bytes);
     const fuente = await doc.embedFont(L.StandardFonts.Helvetica);
-    let leidas = 0, yaTenian = 0;
-    paginas.forEach((x, k) => {
-      if (!x.palabras) yaTenian++;
-      else leidas += capaDeTexto(L, doc, fuente, doc.getPage(cuales[k]), x.palabras, x.esc);
-    });
+    let leidas = 0, yaTenian = 0, cambiadas = 0;
+    for (const [k, x] of paginas.entries()) {
+      if (!x.palabras) { yaTenian++; continue; }
+      let p = doc.getPage(cuales[k]);
+      if (x.foto) {
+        // Hoja con texto roto: se pone en su lugar una hoja nueva con la imagen de cómo se veía
+        const [W, H] = tamVisible(p), img = await doc.embedJpg(x.foto);
+        p = doc.insertPage(cuales[k], [W, H]);
+        p.drawImage(img, { x: 0, y: 0, width: W, height: H });
+        doc.removePage(cuales[k] + 1);
+        cambiadas++;
+      }
+      leidas += capaDeTexto(L, doc, fuente, p, x.palabras, x.esc);
+    }
     const texto = paginas.map((x) => x.texto).filter(Boolean).join("\n\n");
     if (!leidas && !yaTenian) throw new Error("No se encontró texto. Revisa que la hoja esté derecha y se lea bien.");
     const sinTexto = paginas.length - leidas - yaTenian;
     if (!leidas) aviso("avisoOcr", "Este PDF ya tenía texto que se puede buscar y copiar; no hizo falta leerlo. Abajo queda el texto.");
     else {
       filaDescarga($("salidaOcr"), await doc.save(), a.nombre + " (con texto).pdf",
-        `Texto reconocido en ${paginasTxt(leidas)}` + (yaTenian ? `; ${yaTenian === 1 ? "1 ya lo tenía" : yaTenian + " ya lo tenían"}` : "") + (sinTexto ? `; ${sinTexto} sin texto` : ""));
+        `Texto reconocido en ${paginasTxt(leidas)}` + (yaTenian ? `; ${yaTenian === 1 ? "1 ya lo tenía" : yaTenian + " ya lo tenían"}` : "") + (sinTexto ? `; ${sinTexto} sin texto` : "")
+        + (cambiadas ? `; ${cambiadas === 1 ? "1 traía texto roto y se cambió" : cambiadas + " traían texto roto y se cambiaron"} por su imagen` : ""));
       aviso("avisoOcr", "Listo.");
     }
     filaDescarga($("salidaOcr"), new TextEncoder().encode(texto.replace(/\n/g, "\r\n") + "\r\n"), a.nombre + ".txt", "Solo el texto", "text/plain;charset=utf-8");
