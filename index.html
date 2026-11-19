@@ -2376,6 +2376,299 @@ function capaDeTexto(L, doc, fuente, p, palabras, esc) {
   return 1;
 }
 
+// ---------------------------------------------------------------- 14b. reparar el texto roto
+// Hay PDF (p. ej. los que hacía Mac OS X 10.5) cuyas fuentes no dicen qué letra es cada código: se ven
+// bien, pero al copiar sale basura. Cada dibujo de letra se repite miles de veces, así que basta leer
+// con OCR unas cuantas hojas para saber qué letra es cada dibujo y escribir esa tabla (ToUnicode) en
+// las fuentes. Las hojas quedan iguales y todo el libro se puede copiar, sin leerlo completo.
+// Huella de 64 bits (dos FNV-1a de 32) de una lista de bytes/números
+function huella(arr) {
+  let a = 0x811c9dc5, b = 0x050c5d1f;
+  for (let i = 0; i < arr.length; i++) { const x = arr[i] & 0xff; a = Math.imul(a ^ x, 16777619); b = Math.imul(b ^ x, 16777619) ^ (b >>> 13); }
+  return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
+}
+// Lee una fuente TrueType incrustada → código (0-255) → huella del dibujo y su ancho ("" = dibujo vacío, es espacio)
+function dibujosTrueType(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), u16 = (o) => dv.getUint16(o), u32 = (o) => dv.getUint32(o);
+  const t = {}, n = u16(4);
+  for (let i = 0; i < n; i++) { const o = 12 + 16 * i; t[String.fromCharCode(...bytes.subarray(o, o + 4))] = { o: u32(o + 8), l: u32(o + 12) }; }
+  if (!t.cmap || !t.glyf || !t.loca || !t.head) return null;
+  const largo = u16(t.head.o + 50), nGlifos = t.maxp ? u16(t.maxp.o + 4) : 65535;
+  const loca = (g) => largo ? u32(t.loca.o + 4 * g) : 2 * u16(t.loca.o + 2 * g);
+  const nMet = t.hhea ? u16(t.hhea.o + 34) : 0;
+  const ancho = (g) => !t.hmtx || !nMet ? 0 : u16(t.hmtx.o + 4 * Math.min(g, nMet - 1));
+  // Las tablas cmap: (1,0) y (3,0)/(3,1), formatos 0, 4 y 6
+  const tablas = [];
+  for (let i = 0, k = u16(t.cmap.o + 2); i < k; i++) {
+    const o = t.cmap.o + 4 + 8 * i, pl = u16(o), en = u16(o + 2), off = t.cmap.o + u32(o + 4);
+    tablas.push({ pl, en, off, f: u16(off) });
+  }
+  const buscar = (tb, c) => {
+    const o = tb.off;
+    if (tb.f === 0) return c < 256 ? bytes[o + 6 + c] : 0;
+    if (tb.f === 6) { const pri = u16(o + 6), cu = u16(o + 8); return c >= pri && c < pri + cu ? u16(o + 10 + 2 * (c - pri)) : 0; }
+    if (tb.f === 4) {
+      const seg = u16(o + 6) / 2, fin = o + 14, ini = fin + 2 * seg + 2, del = ini + 2 * seg, ran = del + 2 * seg;
+      for (let s = 0; s < seg; s++) {
+        if (c > u16(fin + 2 * s)) continue;
+        if (c < u16(ini + 2 * s)) return 0;
+        const r = u16(ran + 2 * s);
+        if (!r) return (c + dv.getInt16(del + 2 * s)) & 0xffff;
+        const g = u16(ran + 2 * s + r + 2 * (c - u16(ini + 2 * s)));
+        return g ? (g + dv.getInt16(del + 2 * s)) & 0xffff : 0;
+      }
+    }
+    return 0;
+  };
+  const glifoDe = (c) => {
+    for (const tb of tablas) {
+      const g = tb.pl === 1 ? buscar(tb, c) : tb.pl === 3 ? buscar(tb, c) || buscar(tb, 0xf000 | c) : 0;
+      if (g && g < nGlifos) return g;
+    }
+    return 0;
+  };
+  const memo = new Map();
+  const forma = (g, prof = 0) => {
+    if (memo.has(g)) return memo.get(g);
+    const a = loca(g), b = loca(g + 1);
+    let h;
+    if (b <= a) h = "";
+    else if (dv.getInt16(t.glyf.o + a) >= 0) h = huella(bytes.subarray(t.glyf.o + a, t.glyf.o + b));
+    else {      // compuesto (letras con acento): cada parte por su propia huella, no por su número
+      const partes = [];
+      let o = t.glyf.o + a + 10, fl;
+      do {
+        fl = u16(o); const gi = u16(o + 2);
+        let l = 4 + (fl & 1 ? 4 : 2) + (fl & 8 ? 2 : fl & 0x40 ? 4 : fl & 0x80 ? 8 : 0);
+        partes.push(fl & 0xffef, prof < 8 ? forma(gi, prof + 1) : gi, ...bytes.subarray(o + 4, o + l));
+        o += l;
+      } while (fl & 0x20 && o < t.glyf.o + b);
+      h = "c" + huella(new TextEncoder().encode(partes.join(",")));
+    }
+    memo.set(g, h);
+    return h;
+  };
+  const res = new Map();
+  for (let c = 0; c < 256; c++) { const g = glifoDe(c); if (g) res.set(c, forma(g) === "" ? "" : forma(g) + "/" + ancho(g)); }
+  return res;
+}
+// Fuentes con el texto roto: TrueType simples con su archivo incrustado y un ToUnicode vacío
+function fuentesRotas(L, doc) {
+  const { PDFName, PDFDict, PDFRawStream, decodePDFRawStream } = L, rotas = new Map(), vistas = new Set();
+  const flujo = (s) => s instanceof PDFRawStream ? decodePDFRawStream(s).decode() : s.getContents ? s.getContents() : null;
+  for (const p of doc.getPages()) {
+    const fs = p.node.Resources()?.lookupMaybe(PDFName.of("Font"), PDFDict);
+    if (!fs) continue;
+    for (const [, ref] of fs.entries()) {
+      const k = String(ref);
+      if (vistas.has(k)) continue;
+      vistas.add(k);
+      try {
+        const f = doc.context.lookup(ref, PDFDict);
+        if (String(f.get(PDFName.of("Subtype"))) !== "/TrueType") continue;
+        const tu = f.lookup(PDFName.of("ToUnicode"));
+        if (tu && /bf(char|range)/.test(new TextDecoder("latin1").decode(flujo(tu)))) continue;
+        const ff = f.lookup(PDFName.of("FontDescriptor"))?.lookup(PDFName.of("FontFile2"));
+        const dib = ff && dibujosTrueType(flujo(ff));
+        if (dib && dib.size) rotas.set(k, { dict: f, dib });
+      } catch {}
+    }
+  }
+  return rotas;
+}
+// Lee el contenido de una hoja → trozos de texto { x, y, letras: [huella] } en coordenadas de la hoja
+function trozosDeTexto(L, doc, p, rotas) {
+  const { PDFName, PDFDict, PDFArray, PDFRawStream, decodePDFRawStream } = L;
+  const fs = p.node.Resources()?.lookupMaybe(PDFName.of("Font"), PDFDict), nombres = new Map();
+  if (fs) for (const [n, ref] of fs.entries()) nombres.set(n.asString().replace(/^\//, ""), String(ref));
+  let cont = p.node.Contents(), partes = [];
+  if (cont instanceof PDFArray) for (let i = 0; i < cont.size(); i++) partes.push(cont.lookup(i));
+  else if (cont) partes.push(cont);
+  const trozos = [];
+  for (const s of partes) {
+    const b = s instanceof PDFRawStream ? decodePDFRawStream(s).decode() : s.getContents();
+    leerFlujo(b, trozos, nombres, rotas);
+  }
+  return trozos;
+}
+const mult = (m, n) => [m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3], m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3], m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]];
+function leerFlujo(b, trozos, nombres, rotas) {
+  const n = b.length, pila = [], ops = [];
+  let ctm = [1, 0, 0, 1, 0, 0], tm = ctm, tlm = ctm, tl = 0, fuente = null, i = 0;
+  const cadena = () => {        // (…) con escapes → bytes
+    const r = []; let nivel = 1; i++;
+    while (i < n) {
+      let c = b[i++];
+      if (c === 92) {
+        c = b[i++];
+        if (c >= 48 && c <= 55) { let v = c - 48; for (let k = 0; k < 2 && b[i] >= 48 && b[i] <= 55; k++) v = v * 8 + b[i++] - 48; r.push(v & 255); }
+        else if (c === 110) r.push(10); else if (c === 114) r.push(13); else if (c === 116) r.push(9);
+        else if (c === 98) r.push(8); else if (c === 102) r.push(12);
+        else if (c === 13) { if (b[i] === 10) i++; } else if (c !== 10) r.push(c);
+      } else if (c === 40) { nivel++; r.push(c); }
+      else if (c === 41) { if (!--nivel) break; r.push(c); }
+      else r.push(c);
+    }
+    return { s: r };
+  };
+  const mostrar = (cods) => {
+    if (!fuente) return;
+    const m = mult(tm, ctm);
+    trozos.push({ x: m[4], y: m[5], letras: cods.map((c) => fuente.dib.get(c) ?? "?" + c) });
+  };
+  const delim = (c) => c <= 32 || "()<>[]{}/%".includes(String.fromCharCode(c));
+  while (i < n) {
+    const c = b[i];
+    if (c <= 32) { i++; continue; }
+    if (c === 37) { while (i < n && b[i] !== 10 && b[i] !== 13) i++; continue; }
+    if (c === 40) { ops.push(cadena()); continue; }
+    if (c === 60 && b[i + 1] !== 60) {
+      let j = i + 1, h = ""; while (j < n && b[j] !== 62) { if (b[j] > 32) h += String.fromCharCode(b[j]); j++; }
+      i = j + 1; if (h.length % 2) h += "0";
+      ops.push({ s: Array.from({ length: h.length / 2 }, (_, k) => parseInt(h.substr(2 * k, 2), 16)) }); continue;
+    }
+    if (c === 60 || c === 62) { i += 2; ops.push({ d: 1 }); continue; }
+    if (c === 91) { i++; ops.push({ abre: 1 }); continue; }
+    if (c === 93) {
+      i++; const arr = []; let x;
+      while (ops.length && !(x = ops.pop()).abre) arr.unshift(x);
+      ops.push({ arr }); continue;
+    }
+    let j = i + 1;
+    if (c === 47) { while (j < n && !delim(b[j])) j++; ops.push({ nom: String.fromCharCode(...b.subarray(i + 1, j)) }); i = j; continue; }
+    while (j < n && !delim(b[j])) j++;
+    const w = String.fromCharCode(...b.subarray(i, j)); i = j;
+    const num = Number(w);
+    if (w !== "" && !Number.isNaN(num)) { ops.push(num); continue; }
+    // un operador
+    const nums = (k) => ops.slice(-k);
+    switch (w) {
+      case "q": pila.push(ctm); break;
+      case "Q": ctm = pila.pop() || [1, 0, 0, 1, 0, 0]; break;
+      case "cm": ctm = mult(nums(6), ctm); break;
+      case "BT": tm = tlm = [1, 0, 0, 1, 0, 0]; break;
+      case "Tm": tm = tlm = nums(6); break;
+      case "Td": tm = tlm = mult([1, 0, 0, 1, ...nums(2)], tlm); break;
+      case "TD": { const [x, y] = nums(2); tl = -y; tm = tlm = mult([1, 0, 0, 1, x, y], tlm); break; }
+      case "TL": tl = ops[ops.length - 1]; break;
+      case "T*": tm = tlm = mult([1, 0, 0, 1, 0, -tl], tlm); break;
+      case "Tf": { const o = ops[ops.length - 2]; fuente = o && o.nom ? rotas.get(nombres.get(o.nom)) || null : null; break; }
+      case "Tj": case "'": case '"': {
+        if (w !== "Tj") tm = tlm = mult([1, 0, 0, 1, 0, -tl], tlm);
+        const o = ops[ops.length - 1]; if (o && o.s) mostrar(o.s); break;
+      }
+      case "TJ": { const o = ops[ops.length - 1]; if (o && o.arr) mostrar(o.arr.flatMap((x) => x.s || [])); break; }
+      case "ID": { while (i < n - 2 && !(b[i] === 69 && b[i + 1] === 73 && delim(b[i + 2]) && delim(b[i - 1]))) i++; i += 2; break; }
+    }
+    ops.length = 0;
+  }
+}
+// Empata los renglones que leyó el OCR con los trozos de texto de la hoja y anota votos huella → letra
+function votarHoja(trozos, vista, data, votos) {
+  const pts = trozos.map((t) => { const [x, y] = vista.convertToViewportPoint(t.x, t.y); return { x, y, l: t.letras }; });
+  let renglones = 0, usados = 0;
+  for (const bl of data.blocks || []) for (const pa of bl.paragraphs) for (const li of pa.lines) {
+    renglones++;
+    const h = li.bbox.y1 - li.bbox.y0, base = li.baseline && li.baseline.y0 > 0 ? (li.baseline.y0 + li.baseline.y1) / 2 : li.bbox.y1;
+    const mios = pts.filter((t) => Math.abs(t.y - base) < 0.35 * h && t.x > li.bbox.x0 - h && t.x < li.bbox.x1 + h / 2).sort((a, b) => a.x - b.x);
+    const seq = [];
+    for (const t of mios) for (const k of t.l) if (k !== "" || (seq.length && seq[seq.length - 1] !== "")) seq.push(k);
+    while (seq.length && seq[seq.length - 1] === "") seq.pop();
+    const txt = [...li.words.map((w) => w.text).join(" ")];
+    if (seq.length !== txt.length || !seq.length) continue;
+    if (seq.some((k, i) => (k === "") !== (txt[i] === " "))) continue;
+    usados++;
+    seq.forEach((k, i) => { if (k) { const v = votos.get(k) || new Map(); v.set(txt[i], (v.get(txt[i]) || 0) + 1); votos.set(k, v); } });
+  }
+  return { renglones, usados };
+}
+function letraDe(v, estricto) {
+  if (!v) return null;
+  let top = null, n = 0, suma = 0;
+  for (const [c, k] of v) { suma += k; if (k > n) { n = k; top = c; } }
+  return estricto ? (n >= 2 && n >= 0.8 * suma ? top : null) : (n >= 0.6 * suma ? top : null);
+}
+
+// Aprende las letras leyendo con OCR las hojas que más dibujos nuevos traen → PDF reparado (o null)
+async function repararTexto(bytes, cuales, idioma, avance) {
+  const L = await pdfLib(), doc = await L.PDFDocument.load(bytes);
+  const rotas = fuentesRotas(L, doc);
+  if (!rotas.size) return null;
+  const pags = doc.getPages(), cuenta = new Map(), clavesHoja = new Map();
+  for (const i of cuales) {
+    const s = new Set();
+    for (const t of trozosDeTexto(L, doc, pags[i], rotas)) for (const k of t.letras) if (k) { s.add(k); cuenta.set(k, (cuenta.get(k) || 0) + 1); }
+    if (s.size) clavesHoja.set(i, s);
+  }
+  if (!clavesHoja.size) return null;
+  const votos = new Map(), intentos = new Map(), hechas = new Set();
+  const sabe = (k) => letraDe(votos.get(k), true) !== null;
+  const avanzo = (relajado) => {
+    let si = 0, todas = 0;
+    for (const [k, n] of cuenta) { todas += n; if (relajado ? letraDe(votos.get(k), false) !== null : sabe(k)) si += n; }
+    return si / todas;
+  };
+  // La hoja con más dibujos que aún no se saben (cada dibujo se intenta en 3 hojas como mucho:
+  // el griego o el hebreo, por ejemplo, no los lee el OCR en español)
+  const elegir = () => {
+    let mejor = -1, pts = 0;
+    for (const [i, s] of clavesHoja) {
+      if (hechas.has(i)) continue;
+      let n = 0;
+      for (const k of s) if (!sabe(k) && (intentos.get(k) || 0) < 3) n++;
+      if (n > pts) { pts = n; mejor = i; }
+    }
+    if (mejor >= 0) { hechas.add(mejor); for (const k of clavesHoja.get(mejor)) if (!sabe(k)) intentos.set(k, (intentos.get(k) || 0) + 1); }
+    return mejor;
+  };
+  const pdfjs = await pdfJs(), vista = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const lectores = [];
+  let muestras = 0;
+  try {
+    const cuantos = navigator.hardwareConcurrency >= 4 ? 2 : 1;
+    for (let n = 0; n < cuantos; n++) lectores.push(await lectorOcr(idioma, () => {}));
+    avance(0, 0);
+    await Promise.all(lectores.map(async (lector) => {
+      for (let i; (i = elegir()) >= 0;) {
+        const pagina = await vista.getPage(i + 1), b = pagina.getViewport({ scale: 1 });
+        const v = pagina.getViewport({ scale: Math.min(200 / 72, 3000 / Math.max(b.width, b.height)) });
+        const lienzo = document.createElement("canvas");
+        lienzo.width = Math.round(v.width); lienzo.height = Math.round(v.height);
+        await pagina.render({ canvasContext: lienzo.getContext("2d"), viewport: v }).promise;
+        const { data } = await lector.recognize(lienzo, {}, { blocks: true });
+        lienzo.width = lienzo.height = 0;
+        votarHoja(trozosDeTexto(L, doc, pags[i], rotas), v, data, votos);
+        pagina.cleanup();
+        avance(avanzo(false), ++muestras);
+      }
+    }));
+  } finally {
+    for (const l of lectores) l.terminate().catch(() => {});
+    vista.destroy();
+  }
+  const cobertura = avanzo(true);
+  if (!cobertura) return null;
+  // La tabla código → letra de cada fuente rota (en bloques de 100, como pide el formato)
+  const hex = (n) => n.toString(16).toUpperCase().padStart(2, "0");
+  for (const f of rotas.values()) {
+    const pares = [];
+    for (const [c, k] of f.dib) {
+      const ch = k === "" ? " " : letraDe(votos.get(k), false);
+      if (ch) pares.push(`<${hex(c)}> <${Array.from(ch, (_, j) => ch.charCodeAt(j).toString(16).toUpperCase().padStart(4, "0")).join("")}>`);
+    }
+    if (!pares.some((x) => !x.endsWith("<0020>"))) continue;
+    let cmap = "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n"
+      + "/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<00> <FF>\nendcodespacerange\n";
+    for (let j = 0; j < pares.length; j += 100) {
+      const t = pares.slice(j, j + 100);
+      cmap += `${t.length} beginbfchar\n${t.join("\n")}\nendbfchar\n`;
+    }
+    cmap += "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n";
+    f.dict.set(L.PDFName.of("ToUnicode"), doc.context.register(doc.context.flateStream(cmap)));
+  }
+  return { bytes: await doc.save(), muestras, cobertura };
+}
+
 let paraOcr = null;      // { nombre, bytes, total, fotos }
 zonaDeArchivos($("zonaOcr"), $("archivosOcr"), async (fs) => {
   const pdf = fs.find(esPdf), fotos = fs.filter(esImagen);
@@ -2408,11 +2701,16 @@ $("botonOcr").onclick = async () => {
   try {
     const cuales = enOrden(a.fotos ? "" : $("paginasOcr").value, a.total);
     aviso("avisoOcr", "Preparando el lector de texto (la primera vez tarda: baja unos 9 MB)…");
-    const paginas = await leerPaginas(a.bytes, cuales, $("idiomaOcr").value, (hechas, total) =>
+    // Si las fuentes traen el texto roto, primero se reparan (basta leer unas cuantas hojas)
+    const reparo = a.fotos ? null : await repararTexto(a.bytes, cuales, $("idiomaOcr").value, (parte, hojas) =>
+      hojas && aviso("avisoOcr", `El texto de este PDF viene roto; aprendiendo sus letras (${hojas === 1 ? "1 hoja leída" : hojas + " hojas leídas"})… ${Math.floor(parte * 100)} %`));
+    const bytes = reparo ? reparo.bytes : a.bytes;
+    if (reparo) aviso("avisoOcr", "Revisando las hojas…");
+    const paginas = await leerPaginas(bytes, cuales, $("idiomaOcr").value, (hechas, total) =>
       aviso("avisoOcr", hechas < 0 ? $("avisoOcr").textContent
         : total === 1 ? `Leyendo… ${Math.round(hechas * 100)} %` : `Leyendo ${paginasTxt(total)}… ${Math.floor(hechas * 100 / total)} %`));
     aviso("avisoOcr", "Armando el PDF…");
-    const L = await pdfLib(), doc = await L.PDFDocument.load(a.bytes);
+    const L = await pdfLib(), doc = await L.PDFDocument.load(bytes);
     const fuente = await doc.embedFont(L.StandardFonts.Helvetica);
     let leidas = 0, yaTenian = 0, cambiadas = 0;
     for (const [k, x] of paginas.entries()) {
@@ -2431,11 +2729,16 @@ $("botonOcr").onclick = async () => {
     const texto = paginas.map((x) => x.texto).filter(Boolean).join("\n\n");
     if (!leidas && !yaTenian) throw new Error("No se encontró texto. Revisa que la hoja esté derecha y se lea bien.");
     const sinTexto = paginas.length - leidas - yaTenian;
-    if (!leidas) aviso("avisoOcr", "Este PDF ya tenía texto que se puede buscar y copiar; no hizo falta leerlo. Abajo queda el texto.");
+    if (!leidas && !reparo) aviso("avisoOcr", "Este PDF ya tenía texto que se puede buscar y copiar; no hizo falta leerlo. Abajo queda el texto.");
     else {
-      filaDescarga($("salidaOcr"), await doc.save(), a.nombre + " (con texto).pdf",
-        `Texto reconocido en ${paginasTxt(leidas)}` + (yaTenian ? `; ${yaTenian === 1 ? "1 ya lo tenía" : yaTenian + " ya lo tenían"}` : "") + (sinTexto ? `; ${sinTexto} sin texto` : "")
-        + (cambiadas ? `; ${cambiadas === 1 ? "1 traía texto roto y se cambió" : cambiadas + " traían texto roto y se cambiaron"} por su imagen` : ""));
+      const datos = [];
+      if (reparo) datos.push(`Texto reparado (se leyeron ${paginasTxt(reparo.muestras)} de muestra)`
+        + (reparo.cobertura < 0.995 ? `; ${Math.max(1, Math.round((1 - reparo.cobertura) * 100))} % de las letras no se pudo leer (p. ej. griego o hebreo) y quedó como estaba` : ""));
+      if (leidas) datos.push(`Texto reconocido en ${paginasTxt(leidas)}`);
+      if (yaTenian && !reparo) datos.push(yaTenian === 1 ? "1 ya lo tenía" : yaTenian + " ya lo tenían");
+      if (sinTexto) datos.push(`${sinTexto} sin texto`);
+      if (cambiadas) datos.push(`${cambiadas === 1 ? "1 traía texto roto y se cambió" : cambiadas + " traían texto roto y se cambiaron"} por su imagen`);
+      filaDescarga($("salidaOcr"), leidas ? await doc.save() : bytes, a.nombre + " (con texto).pdf", datos.join("; "));
       aviso("avisoOcr", "Listo.");
     }
     filaDescarga($("salidaOcr"), new TextEncoder().encode(texto.replace(/\n/g, "\r\n") + "\r\n"), a.nombre + ".txt", "Solo el texto", "text/plain;charset=utf-8");

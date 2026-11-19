@@ -33,6 +33,13 @@ idiomas español e inglés (`4.0.0_best_int` de `@tesseract.js-data`), todo en `
 la primera vez que se usa (unos 9 MB) y `sw.js` lo guarda aparte, para que no se vuelva a bajar cuando
 la app se actualiza. El PDF original no se redibuja: solo se le escribe encima el texto, invisible.
 
+Algunos PDF traen texto que se ve bien pero al copiarlo sale basura (fuentes TrueType con un ToUnicode
+vacío, como los que hacía Mac OS X 10.5). En esos, la app no lee todo el libro: identifica cada dibujo de
+letra por su forma (huella de su contorno en la fuente incrustada), lee con OCR solo las hojas que traen
+dibujos que aún no conoce (unas 100 en un libro de 2,000) y escribe en cada fuente la tabla código → letra.
+Las hojas quedan intactas y el archivo casi no crece. Lo que el OCR no puede leer (p. ej. griego) se queda
+como estaba.
+
 ## Firmar PDF
 
 La firma se dibuja en la página (con el dedo o el ratón) o se saca de una foto, quitándole el papel
