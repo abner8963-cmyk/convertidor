@@ -2311,7 +2311,10 @@ async function leerPaginas(bytes, cuales, idioma, avance) {
       for (let k; (k = sigue++) < cuales.length;) {
         const pagina = await vista.getPage(cuales[k] + 1);
         const propio = (await pagina.getTextContent()).items.map((x) => x.str + (x.hasEOL ? "\n" : " ")).join("").trim();
-        if (propio.replace(/\s/g, "").length > 30) paginas[k] = { texto: propio, palabras: null };
+        // Algunos PDF traen texto con la codificación rota («&02!08'$102+#!»): se ve bien pero al copiar
+        // sale basura. Texto de verdad es casi todo letras (≥ 80 %); si no llega al 60 %, se lee con OCR
+        const lleno = propio.replace(/\s/g, ""), letrasPropias = (lleno.match(/\p{L}/gu) || []).length;
+        if (lleno.length > 30 && letrasPropias >= 0.6 * lleno.length) paginas[k] = { texto: propio, palabras: null };
         else {
           const b = pagina.getViewport({ scale: 1 });
           const esc = Math.min(200 / 72, 3000 / Math.max(b.width, b.height));
