@@ -7,11 +7,11 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "21";
+const VERSION = "22";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice
 const CACHE_OCR = "convertidor-ocr-7.0.0";        // cambia solo si cambia Tesseract o sus idiomas
-const APP = ["./", "index.html", "manifest.webmanifest", "icono.svg", "partes.json",
+const APP = ["./", "index.html", "app.js", "app.css", "manifest.webmanifest", "icono.svg", "partes.json",
              "lib/pdf-lib.min.js", "lib/pdf.min.mjs", "lib/pdf.worker.min.mjs", "lib/qpdf.js", "lib/qpdf.wasm", "lo/soffice.js", "lo/soffice.worker.js", "lo/browser.js", "lo/browser.worker.global.js"];
 
 self.addEventListener("install", (e) => {
@@ -86,12 +86,23 @@ async function delOcr(peticion) {
   return conCabeceras(resp);
 }
 
+// Sin internet, una herramienta que no se ha abierto antes (…/unir-pdf/) se arma con la
+// portada guardada: es la misma app, solo cambia el <base> porque está una carpeta abajo.
+async function paginaDeRespaldo(peticion) {
+  const portada = await caches.match(new URL("index.html", self.registration.scope).href);
+  if (!portada) return null;
+  const dentro = new URL(peticion.url).pathname.slice(new URL(self.registration.scope).pathname.length);
+  if (!dentro.replace(/index\.html$/, "").includes("/")) return portada;
+  const texto = (await portada.text()).replace('<base href="./">', '<base href="../">');
+  return new Response(texto, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+
 async function deLaApp(peticion) {
   // Primero la red (para recibir las actualizaciones), pero sin esperarla más de 3 s si ya
   // hay copia guardada: en redes que no llegan a GitHub Pages (algunas de datos móviles)
   // la conexión se queda colgada en vez de fallar, y la app tardaría en abrir.
   const guardada = caches.match(peticion, { ignoreSearch: true })
-    .then((r) => r || (peticion.mode === "navigate" ? caches.match("index.html") : null));
+    .then((r) => r || (peticion.mode === "navigate" ? paginaDeRespaldo(peticion) : null));
   const red = fetch(peticion).then((resp) => {
     if (resp.ok && peticion.method === "GET") {
       const copia = resp.clone();

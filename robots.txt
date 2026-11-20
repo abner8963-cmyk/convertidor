@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://convertidor.abner8963.workers.dev/sitemap.xml

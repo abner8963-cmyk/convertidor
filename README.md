@@ -65,3 +65,13 @@ eligen por corte en la mediana con difuminado Floyd-Steinberg, conservando la tr
 PNG se escribe a mano (zlib con `CompressionStream`). Volver a guardar una imagen le quita los datos
 de la cámara (fecha, ubicación). Las fotos HEIC de iPhone solo se abren donde el navegador las
 entiende (Safari).
+
+## Páginas por herramienta (generar.py)
+
+Cada herramienta tiene su dirección (`unir-pdf/`, `comprimir-pdf/`, `word-a-pdf/`…) con su título,
+descripción y texto de ayuda, para que aparezca sola en los buscadores. Todas traen la misma app,
+así que cambiar de herramienta no recarga la página; los enlaces viejos (`#unir`) siguen sirviendo.
+
+- Fuente: `fuente/cuerpo.html` (el HTML de la app), `app.css` y `app.js`.
+- `python3 generar.py` escribe `index.html`, las carpetas de cada herramienta, `sitemap.xml` y `robots.txt`.
+  Ahí mismo están el nombre (`NOMBRE`), la dirección principal (`SITIO`) y los textos de cada página.
