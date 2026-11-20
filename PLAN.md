@@ -10,7 +10,7 @@ Ya hecho: 24 herramientas, una página por herramienta para Google (generar.py),
 5. Hojas en blanco en Organizar
 6. Dibujo a mano libre en Editar
 
-## Fase 2 — Las más buscadas
+## Fase 2 — Las más buscadas ✅ HECHA 2026-11-20
 7. PDF a Word (texto y párrafos con PDF.js → .docx)
 8. Redactar: borrar de verdad (hoy «Tapar» deja el texto dentro)
 9. HEIC a JPG (libheif en WASM)

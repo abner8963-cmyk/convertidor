@@ -84,6 +84,29 @@ Recorre los recursos de cada página (y de sus Form XObjects). Los JPG salen tal
 gris, RGB, CMYK, paleta, 1–16 bits, máscaras y SMask se decodifican y salen en PNG. JBIG2 y CCITT
 (escaneos en blanco y negro) no: para esos, «PDF a imágenes».
 
+## PDF a Word
+
+PDF.js da cada trozo de texto con su lugar, tamaño y fuente (el nombre de la fuente dice negrita y
+cursiva). Se juntan en renglones en el orden del PDF y los renglones en párrafos (hueco, sangría,
+cambio de tamaño, renglón corto con punto, título en negrita, viñetas, sangría francesa de listas);
+se detectan centrado, justificado, títulos y se quitan encabezados y pies repetidos. Las imágenes
+se recortan de la hoja dibujada en el lugar que dice la lista de operaciones. El .docx se escribe a
+mano (XML de Word en un .zip sin comprimir). Tablas y columnas salen como párrafos.
+
+## Borrar de verdad (Editar PDF)
+
+La hoja con recuadros «■ Borrar de verdad» se vuelve imagen (200 ppp) con los recuadros negros, y se
+le pone invisible el texto que quedó fuera (para buscar y copiar). Luego se quitan del archivo todos
+los objetos que ya nadie usa (la hoja vieja, su texto, fuentes e imágenes) y las referencias a la
+hoja vieja (marcadores) pasan a la nueva.
+
+## Fotos HEIC
+
+Cualquier zona de archivos pasa las fotos HEIC/HEIF a JPG (o PNG si tienen transparencia) al
+recibirlas, con libheif 1.23 (`lib/libheif.js` + `lib/libheif.wasm`, paquete libheif-js 1.23.5,
+LGPL-3.0; se baja la primera vez que se usa). Hay que pasarle el `.wasm` ya bajado (`wasmBinary`):
+este build no sabe bajarlo solo.
+
 ## Herramientas de imagen
 
 Comprimir, cambiar tamaño, recortar, convertir (JPG, PNG, WebP) y girar imágenes, sin librerías:

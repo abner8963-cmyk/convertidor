@@ -150,3 +150,4 @@
   .hoja-form input.campo-pdf[type=checkbox], .hoja-form input.campo-pdf[type=radio] { padding: 0; accent-color: var(--acento); cursor: pointer; }
   .hoja-form select.campo-pdf { padding: 0; }
   .hoja-form .campo-pdf:disabled { background: transparent; outline: 0; }
+  .objeto.borrar { background: #000; }

@@ -365,7 +365,7 @@ async function iniciarOffice() {
 // ---------------------------------------------------------------- 5. menú de herramientas
 const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr", "firmar", "editar",
   "comprimir-imagen", "cambiar-tamano", "recortar", "convertir-imagen", "girar-imagen", "escanear",
-  "recortarpdf", "reparar", "formulario", "sacarimagenes"];
+  "recortarpdf", "reparar", "formulario", "sacarimagenes", "pdfaword"];
 // Cada herramienta tiene su propia dirección (…/unir-pdf/); las páginas las genera
 // generar.py y todas traen la app completa, así que cambiar de herramienta no recarga.
 const RUTAS = JSON.parse($("rutas").textContent);          // { "unir-pdf": { v: "unir", t: "título" }, "": {…} }
@@ -404,13 +404,81 @@ document.addEventListener("click", (e) => {
 });
 verVista();
 
+// ---- fotos HEIC (las del iPhone): casi ningún navegador las abre, así que en cuanto entran se
+// pasan a JPG con libheif (compilado para el navegador, LGPL-3.0; se baja la primera vez que se usa)
+async function esHeif(f) {
+  const b = new Uint8Array(await f.slice(0, 12).arrayBuffer());
+  return String.fromCharCode(...b.subarray(4, 12)).match(/^ftyp(heic|heix|hevc|hevx|heim|heis|mif1|msf1)$/) !== null;
+}
+let _heif = null;
+function libHeif() {
+  return _heif ||= (async () => {
+    await new Promise((ok, mal) => {
+      const s = document.createElement("script");
+      s.src = new URL("lib/libheif.js", base).href;
+      s.onload = ok; s.onerror = mal;
+      document.head.append(s);
+    });
+    const wasmBinary = new Uint8Array(await (await fetch(new URL("lib/libheif.wasm", base))).arrayBuffer());
+    return window.libheif({ wasmBinary });
+  })().catch(() => { _heif = null; throw new Error("No se pudo cargar el lector de fotos HEIC. Revisa tu internet."); });
+}
+async function heicAJpg(f) {
+  const m = await libHeif(), dec = new m.HeifDecoder();
+  let imgs = [];
+  try {
+    imgs = dec.decode(new Uint8Array(await f.arrayBuffer())) || [];
+    const im = imgs.find((i) => i.is_primary && i.is_primary()) || imgs[0];
+    if (!im) throw 0;
+    const w = im.get_width(), h = im.get_height(), datos = new ImageData(w, h);
+    await new Promise((ok, mal) => im.display(datos, (x) => x ? ok() : mal()));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.getContext("2d").putImageData(datos, 0, 0);
+    // Con transparencia, PNG (el JPG la volvería negra); si no, JPG
+    let alfa = false;
+    for (let i = 3; i < datos.data.length; i += 4) if (datos.data[i] < 255) { alfa = true; break; }
+    const tipo = alfa ? "image/png" : "image/jpeg";
+    const blob = await new Promise((ok) => c.toBlob(ok, tipo, 0.95));
+    c.width = 0;
+    return new File([blob], f.name.replace(/\.(heic|heif|hif)$/i, "") + (alfa ? ".png" : ".jpg"), { type: tipo, lastModified: f.lastModified });
+  } catch (e) {
+    if (e instanceof Error && /HEIC/.test(e.message)) throw e;
+    throw new Error(`«${f.name}» parece HEIC pero no se pudo leer.`);
+  } finally {
+    for (const i of imgs) try { i.free(); } catch { /* ya libre */ }
+  }
+}
+// Devuelve la lista con las HEIC ya en JPG (las que fallen se dejan: la herramienta dirá que no las abre)
+async function sinHeic(fs, avance = () => {}) {
+  if (!fs.some((f) => /\.(heic|heif|hif)$/i.test(f.name) || /hei[cf]/.test(f.type))) {
+    let alguna = false;
+    for (const f of fs) if (f.size > 12 && await esHeif(f)) { alguna = true; break; }
+    if (!alguna) return fs;
+  }
+  const out = [];
+  for (const [k, f] of fs.entries()) {
+    if (f.size > 12 && await esHeif(f)) {
+      avance(fs.length > 1 ? `Abriendo fotos HEIC (${k + 1} de ${fs.length})…` : "Abriendo la foto HEIC…");
+      try { out.push(await heicAJpg(f)); continue; } catch (e) { console.warn(e); }
+    }
+    out.push(f);
+  }
+  return out;
+}
 function zonaDeArchivos(zona, entrada, alRecibir) {
+  const recibir = async (fs) => {
+    const titulo = zona.querySelector("b"), antes = titulo && titulo.textContent;
+    try { fs = await sinHeic(fs, (t) => { if (titulo) titulo.textContent = t; }); }
+    finally { if (titulo) titulo.textContent = antes; }
+    alRecibir(fs);
+  };
   zona.onclick = () => entrada.click();
   zona.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); entrada.click(); } };
-  entrada.onchange = (e) => { alRecibir([...e.target.files]); e.target.value = ""; };
+  entrada.onchange = (e) => { recibir([...e.target.files]); e.target.value = ""; };
   for (const ev of ["dragenter", "dragover"]) zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("encima"); });
   for (const ev of ["dragleave", "drop"]) zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.remove("encima"); });
-  zona.addEventListener("drop", (e) => alRecibir([...e.dataTransfer.files]));
+  zona.addEventListener("drop", (e) => recibir([...e.dataTransfer.files]));
 }
 const esPdf = (f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
 const sinExt = (n) => n.replace(/\.pdf$/i, "");
@@ -1202,6 +1270,7 @@ for (const r of document.querySelectorAll('input[name="tipoMarca"]')) r.onchange
   $("marcaTexto").hidden = imagen; $("marcaImagen").hidden = !imagen;
 };
 async function imagenParaPdf(doc, f) {
+  f = (await sinHeic([f]))[0];
   const bytes = new Uint8Array(await f.arrayBuffer());
   try {
     if (bytes[0] === 0xff && bytes[1] === 0xd8 && orientacionJpeg(bytes) === 1) return await doc.embedJpg(bytes);
@@ -2125,7 +2194,7 @@ async function leerFotoFirma() {
     aviso("notaImagenFirma", String(e && e.message || e), true);
   }
 }
-$("imagenFirma").onchange = (e) => { fotoFirma = e.target.files[0] || null; leerFotoFirma(); };
+$("imagenFirma").onchange = async (e) => { const f = e.target.files[0]; fotoFirma = f ? (await sinHeic([f]))[0] : null; leerFotoFirma(); };
 $("fondoFirma").onchange = leerFotoFirma;
 function verTipoFirma() {
   const imagen = tipoFirma() === "imagen";
@@ -2188,10 +2257,10 @@ const mesaEd = $("mesaEd"), lienzoEd = mesaEd.querySelector("canvas");
 let paraEditar = null;                    // { f, vista, total, i, W, H } (W y H: la hoja en puntos)
 const objetos = [];
 let armada = null, elegido = null, imagenArmada = null, zoomEd = 1;
-const FORMAS = { rect: [150, 60], ovalo: [150, 60], tapar: [150, 18], resaltar: [150, 18], linea: [150, 14], paloma: [16, 16], cruz: [16, 16] };   // tamaño al ponerlas, en puntos
+const FORMAS = { borrar: [150, 18], rect: [150, 60], ovalo: [150, 60], tapar: [150, 18], resaltar: [150, 18], linea: [150, 14], paloma: [16, 16], cruz: [16, 16] };   // tamaño al ponerlas, en puntos
 const TRAZOS = { paloma: [[[5, 55], [38, 90], [95, 10]]], cruz: [[[8, 8], [92, 92]], [[92, 8], [8, 92]]] };      // en un cuadro de 100 × 100
 const CON_COLOR = ["texto", "rect", "ovalo", "linea", "paloma", "cruz", "trazo"], CON_GROSOR = ["rect", "ovalo", "linea", "paloma", "cruz", "trazo"];
-const NOMBRES = { trazo: "tu dibujo", texto: "el texto", paloma: "la palomita", cruz: "la cruz", tapar: "el recuadro blanco", resaltar: "el resaltado", linea: "la línea", rect: "el rectángulo", ovalo: "el óvalo", imagen: "la imagen" };
+const NOMBRES = { borrar: "el recuadro negro (lo de abajo se borra del archivo)", trazo: "tu dibujo", texto: "el texto", paloma: "la palomita", cruz: "la cruz", tapar: "el recuadro blanco", resaltar: "el resaltado", linea: "la línea", rect: "el rectángulo", ovalo: "el óvalo", imagen: "la imagen" };
 // Un punto de la hoja como se ve (medido desde abajo a la izquierda) → sus coordenadas en el PDF
 function aPdf(p, vx, vy) {
   const c = p.getCropBox(), r = giroDe(p);
@@ -2329,9 +2398,10 @@ for (const b of $("herrEd").children) b.onclick = () => {
   else armar(t);
 };
 $("imagenEd").onchange = async (e) => {
-  const f = e.target.files[0];
+  let f = e.target.files[0];
   e.target.value = "";
   if (!f) return;
+  f = (await sinHeic([f]))[0];
   try {
     const mapa = await createImageBitmap(f);
     imagenArmada = { f, url: URL.createObjectURL(f), w: mapa.width, h: mapa.height };
@@ -2420,6 +2490,54 @@ addEventListener("keydown", (e) => {
   elegir(null);
 });
 
+// «Borrar de verdad»: la hoja se vuelve imagen con los recuadros negros encima (así lo de abajo deja de
+// existir) y se le pone, invisible, el texto que quedó fuera de los recuadros, para seguir buscando y copiando.
+async function borrarEnPagina(L, doc, vista, i, cajas, fuente) {
+  const pdfjs = await pdfJs(), pagina = await vista.getPage(i + 1), b = pagina.getViewport({ scale: 1 });
+  const esc = Math.min(200 / 72, Math.sqrt(30e6 / (b.width * b.height))), v = pagina.getViewport({ scale: esc });
+  const c = lienzoNuevo(Math.round(v.width), Math.round(v.height)), ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+  await pagina.render({ canvasContext: ctx, viewport: v }).promise;
+  const px = cajas.map((o) => ({ x0: o.x * c.width - 1, y0: o.y * c.height - 1, x1: (o.x + o.w) * c.width + 1, y1: (o.y + o.h) * c.height + 1 }));
+  ctx.fillStyle = "#000";
+  for (const r of px) ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+  const jpg = await guardarImagen(c, "jpg", 0.9);
+  c.width = 0;
+  const choca = (q) => px.some((r) => q.x0 < r.x1 && q.x1 > r.x0 && q.y0 < r.y1 && q.y1 > r.y0);
+  const palabras = [];
+  for (const it of (await pagina.getTextContent()).items) {
+    if (!it.str || !it.str.trim()) continue;
+    const m = pdfjs.Util.transform(v.transform, it.transform), size = Math.hypot(m[2], m[3]);
+    if (!(size > 0) || m[0] <= 0 || Math.abs(m[1]) > size * 0.02) continue;      // solo texto derecho
+    const cw = it.width * esc / it.str.length;
+    for (const w of it.str.matchAll(/\S+/g)) {
+      const q = { x0: m[4] + w.index * cw, x1: m[4] + (w.index + w[0].length) * cw, y0: m[5] - size * 0.85, y1: m[5] + size * 0.2 };
+      if (!choca(q)) palabras.push({ text: w[0], bbox: q, baseline: { y0: m[5], y1: m[5] } });
+    }
+  }
+  const viejo = doc.getPage(i).ref, nueva = doc.insertPage(i, [b.width, b.height]);
+  doc.removePage(i + 1);
+  nueva.drawImage(await doc.embedJpg(jpg), { x: 0, y: 0, width: b.width, height: b.height });
+  capaDeTexto(L, doc, fuente, nueva, palabras, esc);
+  return [viejo, nueva.ref];
+}
+// Quita del archivo todo lo que ya no se usa (la hoja vieja, su texto, sus imágenes) y cambia las
+// referencias a la hoja vieja (marcadores, enlaces) por la nueva
+function limpiarHuerfanos(L, doc, cambia) {
+  const { PDFRef, PDFDict, PDFArray } = L, ctx = doc.context, vistos = new Set(), cola = [];
+  const valor = (v) => {
+    if (v instanceof PDFRef) { if (!vistos.has(v)) { vistos.add(v); const o = ctx.lookup(v); if (o) cola.push(o); } }
+    else if (v instanceof PDFDict || v instanceof PDFArray) cola.push(v);
+  };
+  const recorrer = (o) => {
+    if (o instanceof PDFDict) for (const [k, v] of o.entries()) { if (cambia.has(v)) o.set(k, cambia.get(v)); valor(o.get(k)); }
+    else if (o instanceof PDFArray) for (let k = 0; k < o.size(); k++) { const v = o.get(k); if (cambia.has(v)) o.set(k, cambia.get(v)); valor(o.get(k)); }
+    else if (o && o.dict instanceof PDFDict) recorrer(o.dict);
+  };
+  for (const v of Object.values(ctx.trailerInfo)) if (v) valor(v);
+  while (cola.length) recorrer(cola.pop());
+  for (const [ref] of ctx.enumerateIndirectObjects()) if (!vistos.has(ref)) ctx.delete(ref);
+}
 $("botonEd").onclick = async () => {
   const a = paraEditar;
   if (!a) return;
@@ -2429,9 +2547,20 @@ $("botonEd").onclick = async () => {
     if (!utiles.length) throw new Error("Todavía no has puesto nada en la hoja.");
     aviso("avisoEd", "Guardando…");
     const L = await pdfLib(), doc = await abrirPdf(a.f);
-    const fuentes = {}, imagenes = new Map(), envueltas = new Set();
+    const fuentes = {}, imagenes = new Map(), envueltas = new Set(), reemplazos = new Map();
+    const borrados = utiles.filter((o) => o.t === "borrar");
+    if (borrados.length) {
+      const fuenteCapa = await doc.embedFont(L.StandardFonts.Helvetica);
+      for (const i of new Set(borrados.map((o) => o.i))) {
+        aviso("avisoEd", `Borrando de verdad en la página ${i + 1}…`);
+        await pintar();
+        const [viejo, nuevo] = await borrarEnPagina(L, doc, a.vista, i, borrados.filter((o) => o.i === i), fuenteCapa);
+        reemplazos.set(viejo, nuevo);
+      }
+    }
     const color = (h) => L.rgb(parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255);
     for (const o of utiles) {
+      if (o.t === "borrar") continue;
       const p = doc.getPage(o.i), [W, H] = tamVisible(p), giro = L.degrees(giroDe(p));
       if (!envueltas.has(o.i)) { envolver(doc, p); envueltas.add(o.i); }
       const en = (vx, vy) => { const [x, y] = aPdf(p, vx, vy); return { x, y }; };
@@ -2473,6 +2602,7 @@ $("botonEd").onclick = async () => {
         p.drawLine({ start: punto(t[k - 1]), end: punto(t[k]), thickness: g, color: color(o.color), lineCap: L.LineCapStyle.Round });
       }
     }
+    if (reemplazos.size) limpiarHuerfanos(L, doc, reemplazos);
     const bytes = await doc.save();
     filaDescarga($("salidaEd"), bytes, sinExt(a.f.name) + " (editado).pdf", `${utiles.length === 1 ? "1 cambio" : utiles.length + " cambios"} en ${paginasTxt(envueltas.size)}`);
     aviso("avisoEd", "Listo. Descarga el PDF aquí abajo; puedes seguir editando y guardar otra vez.");
@@ -2508,7 +2638,7 @@ const mismoFormato = (fmt) => fmt === "webp" ? (sabeWebp ? "webp" : "jpg") : fmt
 async function abrirImagen(f) {
   try { return await createImageBitmap(f, { imageOrientation: "from-image" }); }
   catch {
-    throw new Error(esHeic(f) ? `«${f.name}» es HEIC (de iPhone) y este navegador no lo abre. En el iPhone: Ajustes → Cámara → Formatos → «Más compatible».`
+    throw new Error(esHeic(f) ? `«${f.name}» es HEIC (de iPhone) y no se pudo leer. En el iPhone puedes cambiarlo en Ajustes → Cámara → Formatos → «Más compatible».`
       : `«${f.name}» no se pudo abrir como imagen.`);
   }
 }
@@ -3949,5 +4079,281 @@ $("botonSI").onclick = async () => {
     aviso("avisoSI", String(e && e.message || e), true);
   } finally {
     $("botonSI").disabled = false;
+  }
+};
+
+// ---------------------------------------------------------------- 23. PDF a Word
+// PDF.js da cada trozo de texto con su lugar, tamaño y fuente. Se juntan en renglones (en el orden en
+// que el PDF los escribe, que casi siempre es el de lectura, también con columnas), los renglones en
+// párrafos (por el espacio entre ellos, la sangría, el tamaño y si el renglón anterior acaba corto con
+// punto), y se escribe un .docx a mano: XML de Word dentro de un .zip. Las imágenes se recortan de la
+// hoja dibujada, en el lugar que dice la lista de operaciones de la página.
+let paraWord = null;            // { f, vista, total }
+zonaDeArchivos($("zonaPW"), $("archivoPW"), async (fs) => {
+  const f = fs.find(esPdf);
+  if (!f) { $("infoPW").textContent = "Ese archivo no es un PDF."; return; }
+  $("infoPW").textContent = "Abriendo…";
+  try {
+    const vista = await (await pdfJs()).getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+    if (paraWord) paraWord.vista.destroy();
+    paraWord = { f, vista, total: vista.numPages };
+    $("infoPW").textContent = `${f.name} · ${paginasTxt(vista.numPages)}`;
+    $("opcionesPW").hidden = false;
+    aviso("avisoPW", "");
+  } catch (e) {
+    paraWord = null;
+    $("opcionesPW").hidden = true;
+    $("infoPW").textContent = e && e.name === "PasswordException" ? `«${f.name}» tiene contraseña; quítasela primero con «Quitar contraseña».`
+      : /visor/.test(String(e && e.message)) ? e.message : `«${f.name}» no se pudo leer como PDF.`;
+  }
+});
+// Nombre de la fuente del PDF («ABCDEF+TimesNewRomanPS-BoldItalicMT») → { familia, negrita, cursiva }
+const FAMILIAS = [[/timesnewroman|times/i, "Times New Roman"], [/arial|helvetica|liberationsans|arimo/i, "Arial"], [/calibri|carlito/i, "Calibri"],
+  [/cambria|caladea/i, "Cambria"], [/garamond/i, "Garamond"], [/georgia/i, "Georgia"], [/verdana/i, "Verdana"], [/tahoma/i, "Tahoma"],
+  [/courier|liberationmono|cousine/i, "Courier New"], [/trebuchet/i, "Trebuchet MS"], [/bookantiqua|palatino/i, "Book Antiqua"], [/century/i, "Century Gothic"],
+  [/segoe/i, "Segoe UI"], [/montserrat/i, "Montserrat"], [/roboto/i, "Roboto"], [/opensans/i, "Open Sans"], [/lato/i, "Lato"], [/symbol/i, "Symbol"]];
+function estiloDeFuente(fuente, estilos) {
+  const nombre = String(fuente && fuente.name || "").replace(/^[A-Z]{6}\+/, "");
+  const negrita = !!(fuente && (fuente.bold || fuente.black)) || /bold|black|heavy|semibold|demi|negrita/i.test(nombre);
+  const cursiva = !!(fuente && fuente.italic) || /italic|oblique|kursiv|cursiva/i.test(nombre);
+  let familia = (FAMILIAS.find(([re]) => re.test(nombre.replace(/[\s,_-]/g, ""))) || [])[1];
+  if (!familia) {
+    const limpio = nombre.split(/[-,]/)[0].replace(/(PS)?MT$/, "").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+    familia = limpio && limpio.length < 40 ? limpio : /serif/i.test(estilos && estilos.fontFamily || "") && !/sans/i.test(estilos.fontFamily) ? "Times New Roman" : "Arial";
+  }
+  return { familia, negrita, cursiva };
+}
+const mediana = (xs) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+// Una página → { bloques: [ párrafo | imagen ], sinTexto }  (medidas en puntos, desde arriba a la izquierda)
+async function leerPaginaWord(pdfjs, pagina, conImagenes) {
+  const v = pagina.getViewport({ scale: 1 }), W = v.width, H = v.height;
+  const ops = await pagina.getOperatorList();                 // de paso, carga las fuentes (nombre, negrita, cursiva)
+  const tc = await pagina.getTextContent();
+  const fuenteDe = new Map();
+  const estiloDe = (id) => {
+    if (!fuenteDe.has(id)) { let f = null; try { if (pagina.commonObjs.has(id)) f = pagina.commonObjs.get(id); } catch { /* sin datos */ } fuenteDe.set(id, estiloDeFuente(f, tc.styles[id])); }
+    return fuenteDe.get(id);
+  };
+  // 1. trozos → renglones
+  const renglones = [];
+  let r = null;
+  for (const it of tc.items) {
+    if (typeof it.str !== "string") continue;
+    const m = pdfjs.Util.transform(v.transform, it.transform), size = Math.hypot(m[2], m[3]);
+    if (!it.str.length) { if (it.hasEOL && r) r.fin = true; continue; }
+    if (!(size > 0.5) || Math.abs(m[1]) > size * 0.1 || m[0] <= 0) continue;     // texto girado o vertical: se omite
+    const x = m[4], base = m[5], ancho = it.width, e = estiloDe(it.fontName);
+    const nuevo = !r || r.fin || Math.abs(base - r.base) > Math.max(size, r.size) * 0.45 || x < r.x1 - Math.max(size, r.size) * 1.2;
+    if (nuevo) { r = { x0: x, x1: x, base, size, trozos: [], fin: false }; renglones.push(r); }
+    let texto = it.str.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]/g, "");
+    const hueco = x - r.x1;
+    if (r.trozos.length && hueco > size * 0.18 && !/\s$/.test(r.trozos[r.trozos.length - 1].t) && !/^\s/.test(texto))
+      texto = (hueco > size * 3 ? "\t" : " ") + texto;
+    const ult = r.trozos[r.trozos.length - 1], tam = Math.round(size * 2) / 2;
+    if (ult && ult.familia === e.familia && ult.negrita === e.negrita && ult.cursiva === e.cursiva && ult.size === tam) ult.t += texto;
+    else r.trozos.push({ t: texto, ...e, size: tam });
+    r.x1 = Math.max(r.x1, x + ancho);
+    r.size = Math.max(r.size, size);
+    if (it.hasEOL) r.fin = true;
+  }
+  const llenos = renglones.filter((x) => x.trozos.some((t) => t.t.trim()));
+  // Tamaño de letra del cuerpo (el más común, pesado por letras) y espacio normal entre renglones
+  const porTam = new Map();
+  for (const x of llenos) for (const t of x.trozos) porTam.set(t.size, (porTam.get(t.size) || 0) + t.t.length);
+  const cuerpo = [...porTam].sort((a, b) => b[1] - a[1])[0]?.[0] || 11;
+  const saltos = [];
+  for (let k = 1; k < llenos.length; k++) { const d = llenos[k].base - llenos[k - 1].base; if (d > 0 && Math.abs(llenos[k].size - llenos[k - 1].size) < 1) saltos.push(d / llenos[k].size); }
+  const interlinea = Math.min(2.2, Math.max(1, mediana(saltos) || 1.2));
+  const izq = Math.min(...llenos.map((x) => x.x0), W), der = Math.max(...llenos.map((x) => x.x1), 0);
+  // 2. renglones → párrafos
+  const VINETA = /^\s*([a-zA-Z0-9]{1,3}[).]|[•·▪●○■◦\-–—*➢►✓])\s/;
+  const textoDe = (x) => x.trozos.map((t) => t.t).join("");
+  const todoNegrita = (x) => x.trozos.every((t) => t.negrita || !t.t.trim());
+  const parrafos = [];
+  let p = null;
+  for (const x of llenos) {
+    const ant = p && p.renglones[p.renglones.length - 1];
+    let corta = !p;
+    if (ant) {
+      const d = x.base - ant.base, s = Math.max(x.size, ant.size);
+      const textoAnt = textoDe(ant).trimEnd(), primeroConVineta = p.renglones.length === 1 && VINETA.test(textoDe(ant));
+      corta = d < -s * 0.3 || d > s * (interlinea + 0.3)                     // subió (otra columna) o hay hueco
+        || Math.abs(x.size - ant.size) > 1                                  // cambia el tamaño
+        || (ant.x1 < der - s * 2.5 && /[.:!?»"”)]$/.test(textoAnt))          // el anterior acabó corto y con punto
+        || (ant.x1 < der - s * 4 && todoNegrita(ant) !== todoNegrita(x))     // título corto en negrita y luego texto normal
+        || VINETA.test(textoDe(x))                                           // empieza una viñeta o un inciso
+        || (x.x0 > ant.x0 + s * 1.2 && !primeroConVineta)                   // sangría al empezar (no la francesa de una lista)
+        || (ant.x1 < der - s * 6 && x.x0 < ant.x0 - s * 4);                  // renglón corto y el nuevo empieza mucho más a la izquierda
+    }
+    if (corta) { p = { renglones: [], x0: x.x0, x1: x.x1, top: x.base - x.size, hueco: ant ? x.base - ant.base : null }; parrafos.push(p); }
+    p.renglones.push(x);
+    p.x0 = Math.min(p.x0, x.x0); p.x1 = Math.max(p.x1, x.x1);
+  }
+  const bloques = parrafos.map((q) => {
+    const rs = q.renglones, size = Math.max(...rs.map((x) => x.size));
+    const trozos = [];
+    rs.forEach((x, k) => {
+      for (const t of x.trozos) {
+        const ult = trozos[trozos.length - 1];
+        if (ult && ult.familia === t.familia && ult.negrita === t.negrita && ult.cursiva === t.cursiva && ult.size === t.size) ult.t += t.t; else trozos.push({ ...t });
+      }
+      if (k < rs.length - 1) {          // unir con el siguiente renglón: «pala-» + «bra» → «palabra»
+        const ult = trozos[trozos.length - 1], sig = rs[k + 1].trozos[0]?.t.trimStart() || "";
+        if (/[a-záéíóúñü]-$/i.test(ult.t) && /^[a-záéíóúñü]/.test(sig)) ult.t = ult.t.slice(0, -1);
+        else if (!/\s$/.test(ult.t)) ult.t += " ";
+      }
+    });
+    if (trozos.length) trozos[0].t = trozos[0].t.trimStart();
+    const centros = rs.map((x) => (x.x0 + x.x1) / 2);
+    const centrado = centros.every((c) => Math.abs(c - (izq + der) / 2) < Math.max(12, (der - izq) * 0.04)) && q.x0 > izq + size * 2;
+    const justificado = !centrado && rs.length > 2 && rs.slice(0, -1).filter((x) => x.x1 > der - size * 1.5).length >= (rs.length - 1) * 0.8;
+    const derecha = !centrado && rs.length <= 2 && q.x0 > izq + (der - izq) * 0.45 && rs.every((x) => x.x1 > der - size);
+    const titulo = size >= cuerpo * 1.6 ? 1 : size >= cuerpo * 1.25 && rs.length <= 3 ? 2 : 0;
+    const texto = trozos.map((t) => t.t).join("").trim();
+    const margen = rs.length <= 2 && texto.length < 90 && (q.top < H * 0.08 || rs[rs.length - 1].base > H * 0.92) ? texto.replace(/\d+/g, "#").toLowerCase() : null;
+    return { tipo: "p", top: q.top, margen, trozos, sangria: centrado || derecha ? 0 : Math.max(0, rs.length > 1 ? Math.min(...rs.slice(1).map((x) => x.x0)) - izq : q.x0 - izq),
+      primera: rs.length > 1 ? rs[0].x0 - Math.min(...rs.slice(1).map((x) => x.x0)) : 0,
+      antes: q.hueco === null ? 0 : Math.max(0, q.hueco - size * interlinea), alin: centrado ? "center" : derecha ? "right" : justificado ? "both" : null,
+      titulo, interlinea, renglones: rs.length, size: Math.max(...trozos.map((t) => t.size), 1) };
+  });
+  // 3. imágenes: dónde se pinta cada una (siguiendo los cambios de posición de la lista de operaciones)
+  const sinTexto = llenos.reduce((n, x) => n + x.trozos.reduce((m, t) => m + t.t.trim().length, 0), 0) < 20;
+  if (conImagenes) {
+    const O = pdfjs.OPS, pila = [];
+    let ctm = v.transform.slice();
+    const cajas = [];
+    for (let k = 0; k < ops.fnArray.length; k++) {
+      const fn = ops.fnArray[k], a = ops.argsArray[k];
+      if (fn === O.save) pila.push(ctm);
+      else if (fn === O.restore) ctm = pila.pop() || ctm;
+      else if (fn === O.transform) ctm = pdfjs.Util.transform(ctm, a);
+      else if (fn === O.paintFormXObjectBegin) { pila.push(ctm); if (a && a[0]) ctm = pdfjs.Util.transform(ctm, a[0]); }
+      else if (fn === O.paintFormXObjectEnd) ctm = pila.pop() || ctm;
+      else if (fn === O.paintImageXObject || fn === O.paintInlineImageXObject || fn === O.paintImageXObjectRepeat) {
+        const pts = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => pdfjs.Util.applyTransform([x, y], ctm));
+        const x0 = Math.max(0, Math.min(...pts.map((q) => q[0]))), x1 = Math.min(W, Math.max(...pts.map((q) => q[0])));
+        const y0 = Math.max(0, Math.min(...pts.map((q) => q[1]))), y1 = Math.min(H, Math.max(...pts.map((q) => q[1])));
+        if (x1 - x0 < 24 || y1 - y0 < 24) continue;                                     // adornos y rayitas
+        if (!sinTexto && (x1 - x0) * (y1 - y0) > W * H * 0.6) continue;                  // fondo de la hoja detrás del texto
+        if (cajas.some((c) => x0 >= c.x0 - 2 && x1 <= c.x1 + 2 && y0 >= c.y0 - 2 && y1 <= c.y1 + 2)) continue;   // ya dentro de otra
+        cajas.push({ x0, x1, y0, y1 });
+      }
+    }
+    if (cajas.length) {
+      const esc = Math.min(150 / 72, Math.sqrt(20e6 / (W * H))), vv = pagina.getViewport({ scale: esc });
+      const c = lienzoNuevo(Math.round(vv.width), Math.round(vv.height)), ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+      await pagina.render({ canvasContext: ctx, viewport: vv }).promise;
+      for (const q of cajas) {
+        const w = Math.max(1, Math.round((q.x1 - q.x0) * esc)), h = Math.max(1, Math.round((q.y1 - q.y0) * esc));
+        const r2 = lienzoNuevo(w, h);
+        r2.getContext("2d").drawImage(c, Math.round(q.x0 * esc), Math.round(q.y0 * esc), w, h, 0, 0, w, h);
+        bloques.push({ tipo: "img", top: q.y0, x0: q.x0 - izq, ancho: q.x1 - q.x0, alto: q.y1 - q.y0, bytes: await guardarImagen(r2, "jpg", 0.88) });
+        r2.width = 0;
+      }
+      c.width = 0;
+    }
+  }
+  // Las imágenes van antes del primer párrafo que empieza más abajo que ellas
+  const final = bloques.filter((b) => b.tipo === "p");
+  for (const im of bloques.filter((b) => b.tipo === "img").sort((a, b) => a.top - b.top)) {
+    const k = final.findIndex((b) => b.tipo === "p" && b.top > im.top);
+    final.splice(k < 0 ? final.length : k, 0, im);
+  }
+  return { bloques: final, sinTexto, W, H, izq: llenos.length ? izq : 72, der: llenos.length ? der : W - 72,
+    arriba: llenos.length ? Math.min(...llenos.map((x) => x.base - x.size)) : 72, abajo: llenos.length ? Math.max(...llenos.map((x) => x.base)) : H - 72 };
+}
+const xml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const tw = (pt) => Math.round(pt * 20);           // puntos → veinteavos de punto (medida de Word)
+function docxDe(paginas, saltos) {
+  const media = [];
+  let cuerpoXml = "", nImg = 0;
+  const p0 = paginas[0];
+  const margenIzq = Math.max(36, Math.min(p0.izq, 108)), margenDer = Math.max(36, Math.min(p0.W - p0.der, 108));
+  const margenArr = Math.max(36, Math.min(p0.arriba - 6, 90)), margenAba = Math.max(36, Math.min(p0.H - p0.abajo - 6, 90));
+  const anchoTexto = p0.W - margenIzq - margenDer;
+  paginas.forEach((pg, k) => {
+    pg.bloques.forEach((b, j) => {
+      const nueva = saltos && k > 0 && j === 0;
+      if (b.tipo === "img") {
+        nImg++;
+        media.push({ nombre: `imagen${nImg}.jpg`, bytes: b.bytes });
+        const f = Math.min(1, anchoTexto / b.ancho), cx = Math.round(b.ancho * f * 12700), cy = Math.round(b.alto * f * 12700);
+        const ind = b.x0 > 12 && b.ancho * f + b.x0 < anchoTexto ? `<w:ind w:left="${tw(b.x0)}"/>` : "";
+        cuerpoXml += `<w:p><w:pPr>${nueva ? "<w:pageBreakBefore/>" : ""}<w:spacing w:before="60" w:after="60"/>${ind}</w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${nImg}" name="Imagen ${nImg}"/>`
+          + `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">`
+          + `<pic:nvPicPr><pic:cNvPr id="${nImg}" name="imagen${nImg}.jpg"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rImg${nImg}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>`
+          + `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+        return;
+      }
+      let ppr = b.titulo ? `<w:pStyle w:val="Titulo${b.titulo}"/>` : "";
+      if (nueva) ppr += "<w:pageBreakBefore/>";
+      // Interlineado exacto como en el PDF (con «automático», Word le suma el alto propio de cada fuente)
+      const linea = b.renglones > 1 ? ` w:line="${tw(b.interlinea * b.size)}" w:lineRule="exact"` : "";
+      ppr += `<w:spacing w:before="${Math.min(tw(b.antes), 720)}" w:after="0"${linea}/>`;
+      const sangria = Math.min(b.sangria, anchoTexto * 0.6), primera = Math.max(-sangria, Math.min(b.primera, anchoTexto * 0.4));
+      if (sangria > 3 || Math.abs(primera) > 3) ppr += `<w:ind w:left="${tw(sangria)}"${primera > 3 ? ` w:firstLine="${tw(primera)}"` : primera < -3 ? ` w:hanging="${tw(-primera)}"` : ""}/>`;
+      if (b.alin) ppr += `<w:jc w:val="${b.alin}"/>`;
+      let runs = "";
+      for (const t of b.trozos) {
+        if (!t.t) continue;
+        const rpr = `<w:rPr><w:rFonts w:ascii="${xml(t.familia)}" w:hAnsi="${xml(t.familia)}" w:cs="${xml(t.familia)}"/>${t.negrita ? "<w:b/>" : ""}${t.cursiva ? "<w:i/>" : ""}<w:sz w:val="${Math.round(t.size * 2)}"/><w:szCs w:val="${Math.round(t.size * 2)}"/></w:rPr>`;
+        runs += t.t.split("\t").map((s, i) => (i ? `<w:r>${rpr}<w:tab/></w:r>` : "") + (s ? `<w:r>${rpr}<w:t xml:space="preserve">${xml(s)}</w:t></w:r>` : "")).join("");
+      }
+      cuerpoXml += `<w:p><w:pPr>${ppr}</w:pPr>${runs}</w:p>`;
+    });
+  });
+  const sect = `<w:sectPr><w:pgSz w:w="${tw(p0.W)}" w:h="${tw(p0.H)}"${p0.W > p0.H ? ' w:orient="landscape"' : ""}/><w:pgMar w:top="${tw(margenArr)}" w:right="${tw(margenDer)}" w:bottom="${tw(margenAba)}" w:left="${tw(margenIzq)}" w:header="360" w:footer="360" w:gutter="0"/></w:sectPr>`;
+  const documento = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>${cuerpoXml}${sect}</w:body></w:document>`;
+  const estilos = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">`
+    + `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:eastAsia="Arial"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="es-MX"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>`
+    + `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>`
+    + `<w:style w:type="paragraph" w:styleId="Titulo1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:outlineLvl w:val="0"/></w:pPr></w:style>`
+    + `<w:style w:type="paragraph" w:styleId="Titulo2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:outlineLvl w:val="1"/></w:pPr></w:style></w:styles>`;
+  const relsDoc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rEstilos" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
+    + media.map((m, i) => `<Relationship Id="rImg${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${m.nombre}"/>`).join("") + `</Relationships>`;
+  const tipos = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpg" ContentType="image/jpeg"/>`
+    + `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`;
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rDoc" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+  const cod = new TextEncoder();
+  return zipSimple([
+    { nombre: "[Content_Types].xml", bytes: cod.encode(tipos) }, { nombre: "_rels/.rels", bytes: cod.encode(rels) },
+    { nombre: "word/document.xml", bytes: cod.encode(documento) }, { nombre: "word/styles.xml", bytes: cod.encode(estilos) },
+    { nombre: "word/_rels/document.xml.rels", bytes: cod.encode(relsDoc) },
+    ...media.map((m) => ({ nombre: "word/media/" + m.nombre, bytes: m.bytes })),
+  ]);
+}
+$("botonPW").onclick = async () => {
+  const a = paraWord;
+  if (!a) return;
+  $("botonPW").disabled = true;
+  try {
+    const cuales = [...new Set(leerRangos($("paginasPW").value, a.total).flat())].sort((x, y) => x - y);
+    const pdfjs = await pdfJs(), paginas = [];
+    let escaneadas = 0;
+    for (const [k, i] of cuales.entries()) {
+      aviso("avisoPW", `Leyendo la página ${k + 1} de ${cuales.length}…`);
+      await pintar();
+      const pg = await leerPaginaWord(pdfjs, await a.vista.getPage(i + 1), $("imagenesPW").checked);
+      if (pg.sinTexto) escaneadas++;
+      paginas.push(pg);
+    }
+    // Encabezados y pies de página (lo que se repite arriba o abajo, y los números de página): fuera
+    const veces = new Map();
+    for (const pg of paginas) for (const m of new Set(pg.bloques.map((b) => b.margen).filter(Boolean))) veces.set(m, (veces.get(m) || 0) + 1);
+    const esPie = (m) => m && ((veces.get(m) >= 2 && paginas.length >= 2) || /^(p[aá]g(ina|\.)?\s*)?#(\s*(de|\/|of)\s*#)?$|^[-–—]\s*#\s*[-–—]$/.test(m));
+    for (const pg of paginas) pg.bloques = pg.bloques.filter((b) => !esPie(b.margen));
+    if (escaneadas === paginas.length && !paginas.some((p) => p.bloques.length))
+      throw new Error("Este PDF no tiene texto (parece escaneado). Pásalo primero por «Reconocer texto» y luego conviértelo.");
+    aviso("avisoPW", "Armando el documento de Word…");
+    await pintar();
+    const bytes = docxDe(paginas, $("saltosPW").checked);
+    filaDescarga($("salidaPW"), bytes, sinExt(a.f.name) + ".docx", paginasTxt(paginas.length), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    aviso("avisoPW", "Listo." + (escaneadas ? ` ${escaneadas === 1 ? "Una página no tiene" : escaneadas + " páginas no tienen"} texto (parece${escaneadas === 1 ? "" : "n"} escaneada${escaneadas === 1 ? "" : "s"}): para que salga como texto, pasa el PDF antes por «Reconocer texto».` : ""));
+    $("salidaPW").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } catch (e) {
+    aviso("avisoPW", String(e && e.message || e), true);
+  } finally {
+    $("botonPW").disabled = false;
   }
 };
