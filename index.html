@@ -134,6 +134,10 @@
   .caja-recorte .asa::before { content: ""; position: absolute; inset: -9px; }
   .asa.nw { left: -13px; top: -13px; cursor: nwse-resize; } .asa.se { right: -13px; bottom: -13px; cursor: nwse-resize; }
   .asa.ne { right: -13px; top: -13px; cursor: nesw-resize; } .asa.sw { left: -13px; bottom: -13px; cursor: nesw-resize; }
+  .mesa-recorte svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .escaner-esquina { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 99px; background: rgba(255, 255, 255, .3); border: 3px solid var(--acento); box-shadow: 0 0 0 2px #fff; touch-action: none; cursor: move; }
+  .escaner-esquina::before { content: ""; position: absolute; inset: -10px; }
+  ul.imgs li.elegida { border-color: var(--acento); box-shadow: 0 0 0 2px var(--acento); }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -151,6 +155,7 @@
       <li><a href="#organizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1.3"/><rect x="14" y="3" width="7" height="8" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><path d="M15 16.5a3 3 0 1 1 1 3.4M15 20v-2.6h2.6"/></svg><b>Organizar páginas</b><span>Girar, quitar y reordenar</span></a></li>
       <li><a href="#imagenes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 18l5-5 3.5 3.5L16 13l5 5"/></svg><b>Imágenes a PDF</b><span>Fotos, capturas y escaneos</span></a></li>
       <li><a href="#aimagenes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h6l4 4v5H6z"/><path d="M12 3v4h4"/><rect x="8" y="14" width="13" height="7" rx="1.5"/><path d="M9 20l3.5-3 2.5 2 2-1.5 3 2.5"/></svg><b>PDF a imágenes</b><span>Cada página en JPG o PNG</span></a></li>
+      <li><a href="#escanear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8.5 7.5l7.5.8-.6 8.4-7.6-.6z"/></svg><b>Escanear documento</b><span>Fotos de hojas, derechas y en blanco</span></a></li>
       <li><a href="#comprimir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M13 9.5v3.5M11.3 11.3L13 13l1.7-1.7M13 19.5V16M11.3 17.7L13 16l1.7 1.7"/></svg><b>Comprimir PDF</b><span>Que pese menos para enviarlo</span></a></li>
       <li><a href="#numeros"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M10.8 14.2l1.4-1v4.6M10.8 17.8h2.8"/></svg><b>Números de página</b><span>Numerar las hojas</span></a></li>
       <li><a href="#marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 17.5l6-6M9 13.5l2-2M13 17.5l2-2"/></svg><b>Marca de agua</b><span>Texto, sello o logotipo encima</span></a></li>
@@ -306,6 +311,53 @@
         <button id="limpiarImg" class="secundario" hidden>Empezar de nuevo</button>
       </div>
       <ul class="filas" id="salidaImg"></ul>
+    </section>
+  </div>
+
+  <div id="vista-escanear" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Escanear documento</h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaES" tabindex="0" role="button" aria-label="Elegir las fotos de las hojas">
+        <b>Elige o arrastra las fotos de tus hojas</b>
+        <span>Se busca la orilla de cada hoja, se endereza y el papel queda blanco. Cada foto será una página.</span>
+      </div>
+      <input type="file" id="archivosES" multiple hidden accept="image/*">
+      <ul class="paginas imgs" id="listaES"></ul>
+      <div id="editorES" hidden>
+        <p class="aviso" style="margin-top:12px" id="ayudaES"></p>
+        <div class="marco-recorte"><div class="mesa-recorte" id="mesaES"><img id="imgES" alt="Foto de la hoja elegida"><svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><path id="fueraES" fill="rgba(0,0,0,.45)" fill-rule="evenodd"/><polygon id="bordeES" fill="none" stroke="#fff" stroke-width="2" vector-effect="non-scaling-stroke"/></svg><span class="escaner-esquina" data-i="0"></span><span class="escaner-esquina" data-i="1"></span><span class="escaner-esquina" data-i="2"></span><span class="escaner-esquina" data-i="3"></span></div></div>
+        <div class="acciones">
+          <button class="secundario" id="buscarES">Como la encontró</button>
+          <button class="secundario" id="todaES">Toda la foto</button>
+        </div>
+      </div>
+      <div id="opcionesES" hidden>
+        <div class="opciones">
+          <label class="campo">Filtro
+            <select id="filtroES">
+              <option value="color">Documento a color</option>
+              <option value="gris">Documento en gris</option>
+              <option value="bn">Blanco y negro</option>
+              <option value="">Sin filtro (como la foto)</option>
+            </select>
+          </label>
+          <label class="campo">Tamaño de la hoja
+            <select id="hojaES">
+              <option value="documento">Del tamaño del documento</option>
+              <option value="carta">Carta</option>
+              <option value="oficio">Oficio</option>
+              <option value="a4">A4</option>
+            </select>
+          </label>
+        </div>
+        <div class="acciones">
+          <button id="botonES" disabled>Crear PDF</button>
+          <button id="limpiarES" class="secundario" hidden>Empezar de nuevo</button>
+          <p class="aviso" id="avisoES" aria-live="polite"></p>
+        </div>
+      </div>
+      <ul class="filas" id="salidaES"></ul>
     </section>
   </div>
 
@@ -1283,7 +1335,7 @@ async function iniciarOffice() {
 
 // ---------------------------------------------------------------- 5. menú de herramientas
 const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr", "firmar", "editar",
-  "comprimir-imagen", "cambiar-tamano", "recortar", "convertir-imagen", "girar-imagen"];
+  "comprimir-imagen", "cambiar-tamano", "recortar", "convertir-imagen", "girar-imagen", "escanear"];
 function verVista() {
   let nombre = location.hash.slice(1) || "inicio";
   if (!VISTAS.includes(nombre)) nombre = "inicio";
@@ -3743,6 +3795,344 @@ $("botonGI").onclick = () => {
     c.width = 0;
     return { nombre: `${sinExtImg(x.f.name)} (girada).${fmt}`, bytes, tipo: MIME[fmt], detalle: `${px} · girada ${LADOS[x.giro]}` };
   }, "imágenes giradas.zip");
+};
+
+// ---------------------------------------------------------------- 18. escanear documento
+// Como Adobe Scan: en una foto de una hoja se buscan sus orillas, se endereza (perspectiva) y se
+// «blanquea» el papel. Todo con los pixeles de un canvas (px = RGBA, w × h).
+
+// Las 4 esquinas de la hoja [arriba-izq, arriba-der, abajo-der, abajo-izq] como fracción de la foto,
+// o null si no se encontró. Se busca en una foto chica (unos 500 px): el papel es la mancha clara y
+// sin color que está en el centro; luego cada orilla es la recta que mejor sigue su borde.
+function detectarHoja(px, w, h) {
+  const n = w * h, L = new Float32Array(n);
+  for (let i = 0; i < n; i++) L[i] = (px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]) / 3;
+  // color del papel: lo más claro del centro de la foto
+  const cen = [];
+  for (let y = Math.floor(h * 0.3); y < h * 0.7; y++) for (let x = Math.floor(w * 0.3); x < w * 0.7; x++) cen.push(y * w + x);
+  const orden = cen.map((i) => L[i]).sort((a, b) => a - b), corte = orden[Math.floor(orden.length * 0.6)];
+  let R = 0, G = 0, B = 0, k = 0;
+  for (const i of cen) if (L[i] >= corte) { R += px[i * 4]; G += px[i * 4 + 1]; B += px[i * 4 + 2]; k++; }
+  R /= k; G /= k; B /= k;
+  const refL = (R + G + B) / 3, sR = R / (R + G + B), sG = G / (R + G + B), sB = B / (R + G + B);
+  if (refL < 60) return null;
+  const papel = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2], s = r + g + b + 1;
+    const d = Math.abs(r / s - sR) + Math.abs(g / s - sG) + Math.abs(b / s - sB);
+    papel[i] = L[i] > refL * 0.55 && d < 0.075 ? 1 : 0;
+  }
+  // la mancha de papel que toca el centro
+  const hoja = new Uint8Array(n), cola = new Int32Array(n);
+  let ini = 0, fin = 0;
+  for (let y = Math.floor(h * 0.45); y < h * 0.55; y++) for (let x = Math.floor(w * 0.45); x < w * 0.55; x++) {
+    const i = y * w + x;
+    if (papel[i] && !hoja[i]) { hoja[i] = 1; cola[fin++] = i; }
+  }
+  while (ini < fin) {
+    const i = cola[ini++], x = i % w;
+    for (const j of [i - w, i + w, x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1]) if (j >= 0 && j < n && papel[j] && !hoja[j]) { hoja[j] = 1; cola[fin++] = j; }
+  }
+  // tapar sus agujeros (letras, sellos): es hoja todo lo que no se alcanza desde la orilla de la foto
+  const fuera = new Uint8Array(n);
+  ini = fin = 0;
+  for (let x = 0; x < w; x++) for (const i of [x, (h - 1) * w + x]) if (!hoja[i] && !fuera[i]) { fuera[i] = 1; cola[fin++] = i; }
+  for (let y = 0; y < h; y++) for (const i of [y * w, y * w + w - 1]) if (!hoja[i] && !fuera[i]) { fuera[i] = 1; cola[fin++] = i; }
+  while (ini < fin) {
+    const i = cola[ini++], x = i % w;
+    for (const j of [i - w, i + w, x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1]) if (j >= 0 && j < n && !hoja[j] && !fuera[j]) { fuera[j] = 1; cola[fin++] = j; }
+  }
+  let area = 0;
+  for (let i = 0; i < n; i++) if (!fuera[i]) area++;
+  if (area < n * 0.12) return null;
+  const dentro = (x, y) => !fuera[y * w + x];
+  // esquinas aproximadas: los puntos más lejanos en diagonal
+  let e = [[0, 0, Infinity], [0, 0, -Infinity], [0, 0, -Infinity], [0, 0, Infinity]];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (dentro(x, y)) {
+    if (x + y < e[0][2]) e[0] = [x, y, x + y];
+    if (x - y > e[1][2]) e[1] = [x, y, x - y];
+    if (x + y > e[2][2]) e[2] = [x, y, x + y];
+    if (x - y < e[3][2]) e[3] = [x, y, x - y];
+  }
+  // cada orilla: el primer pixel de hoja visto desde afuera, en el tramo de en medio entre sus esquinas
+  const recta = (puntos) => {          // v = a·u + b, quitando los puntos que se salen (dobleces, dedos)
+    let usar = puntos, a = 0, b = 0;
+    for (let vuelta = 0; vuelta < 4; vuelta++) {
+      if (usar.length < 5) break;
+      let su = 0, sv = 0, suu = 0, suv = 0;
+      for (const [u, v] of usar) { su += u; sv += v; suu += u * u; suv += u * v; }
+      const m = usar.length, det = m * suu - su * su;
+      a = det ? (m * suv - su * sv) / det : 0; b = (sv - a * su) / m;
+      const res = puntos.map(([u, v]) => Math.abs(v - a * u - b)), med = [...res].sort((p, q) => p - q)[Math.floor(res.length / 2)];
+      usar = puntos.filter((_, j) => res[j] <= Math.max(1.5, med * 2.5));
+    }
+    return [a, b];
+  };
+  const tramo = (p, q) => { const lo = Math.min(p, q), hi = Math.max(p, q), m = (hi - lo) * 0.12; return [Math.ceil(lo + m), Math.floor(hi - m)]; };
+  const lados = [];
+  { const [a, b] = tramo(e[0][0], e[1][0]), pts = []; for (let x = a; x <= b; x++) for (let y = 0; y < h; y++) if (dentro(x, y)) { pts.push([x, y]); break; } lados.push(recta(pts)); }
+  { const [a, b] = tramo(e[1][1], e[2][1]), pts = []; for (let y = a; y <= b; y++) for (let x = w - 1; x >= 0; x--) if (dentro(x, y)) { pts.push([y, x + 1]); break; } lados.push(recta(pts)); }
+  { const [a, b] = tramo(e[3][0], e[2][0]), pts = []; for (let x = a; x <= b; x++) for (let y = h - 1; y >= 0; y--) if (dentro(x, y)) { pts.push([x, y + 1]); break; } lados.push(recta(pts)); }
+  { const [a, b] = tramo(e[0][1], e[3][1]), pts = []; for (let y = a; y <= b; y++) for (let x = 0; x < w; x++) if (dentro(x, y)) { pts.push([y, x]); break; } lados.push(recta(pts)); }
+  // cruce de una orilla horizontal (y = a·x + b) con una vertical (x = c·y + d)
+  const cruce = ([a, b], [c, d]) => { const x = (c * b + d) / (1 - a * c); return [x, a * x + b]; };
+  const [arr, der, aba, izq] = lados;
+  let esq = [cruce(arr, izq), cruce(arr, der), cruce(aba, der), cruce(aba, izq)];
+  // un poquito hacia adentro, para no dejar una rayita de lo que hay debajo de la hoja
+  const cx = esq.reduce((s, p) => s + p[0], 0) / 4, cy = esq.reduce((s, p) => s + p[1], 0) / 4;
+  esq = esq.map(([x, y]) => [x + (cx - x) * 0.008, y + (cy - y) * 0.008]);
+  return esq.map(([x, y]) => [Math.min(1, Math.max(0, x / w)), Math.min(1, Math.max(0, y / h))]);
+}
+
+// La homografía que lleva los 4 puntos «de» a los 4 puntos «a» (matriz de 3 × 3 en un arreglo de 9)
+function homografia(de, a) {
+  const M = [], v = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = de[i], [u, w] = a[i];
+    M.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); v.push(u);
+    M.push([0, 0, 0, x, y, 1, -w * x, -w * y]); v.push(w);
+  }
+  for (let c = 0; c < 8; c++) {          // Gauss con pivote
+    let p = c;
+    for (let r = c + 1; r < 8; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    [M[c], M[p]] = [M[p], M[c]]; [v[c], v[p]] = [v[p], v[c]];
+    for (let r = 0; r < 8; r++) if (r !== c) {
+      const f = M[r][c] / M[c][c];
+      for (let k = c; k < 8; k++) M[r][k] -= f * M[c][k];
+      v[r] -= f * v[c];
+    }
+  }
+  return [...v.map((x, i) => x / M[i][i]), 1];
+}
+
+// Medida natural de la hoja enderezada (en pixeles de la foto) a partir de sus esquinas en pixeles
+function medidaHoja(q) {
+  const d = (p, r) => Math.hypot(p[0] - r[0], p[1] - r[1]);
+  return [Math.max(d(q[0], q[1]), d(q[3], q[2])), Math.max(d(q[0], q[3]), d(q[1], q[2]))];
+}
+
+// La hoja enderezada: cada pixel de salida (ow × oh) se toma de la foto (sw × sh) con interpolación bilineal
+function enderezar(src, sw, sh, q, ow, oh) {
+  const H = homografia([[0, 0], [ow, 0], [ow, oh], [0, oh]], q), out = new Uint8ClampedArray(ow * oh * 4);
+  for (let y = 0; y < oh; y++) {
+    const yy = y + 0.5;
+    for (let x = 0; x < ow; x++) {
+      const xx = x + 0.5, z = H[6] * xx + H[7] * yy + 1;
+      let fx = (H[0] * xx + H[1] * yy + H[2]) / z - 0.5, fy = (H[3] * xx + H[4] * yy + H[5]) / z - 0.5;
+      fx = fx < 0 ? 0 : fx > sw - 1.001 ? sw - 1.001 : fx; fy = fy < 0 ? 0 : fy > sh - 1.001 ? sh - 1.001 : fy;
+      const x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0, i = (y0 * sw + x0) * 4, j = i + sw * 4, o = (y * ow + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const s = src[i + c] + (src[i + 4 + c] - src[i + c]) * ax, t = src[j + c] + (src[j + 4 + c] - src[j + c]) * ax;
+        out[o + c] = s + (t - s) * ay;
+      }
+      out[o + 3] = 255;
+    }
+  }
+  return out;
+}
+
+// Filtro de documento: se calcula de qué color se ve el papel en cada zona (la luz nunca es pareja)
+// y se divide entre él, así el papel queda blanco y la tinta conserva su color; luego más contraste.
+// modo: "color", "gris", "bn" (blanco y negro) o "" (sin filtro)
+function filtroDocumento(px, w, h, modo) {
+  if (!modo) return;
+  const B = Math.max(8, Math.round(Math.max(w, h) / 80)), bw = Math.ceil(w / B), bh = Math.ceil(h / B);
+  const fondo = [new Float32Array(bw * bh), new Float32Array(bw * bh), new Float32Array(bw * bh)];
+  const hist = new Uint32Array(256);
+  for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) {
+    hist.fill(0);
+    const x1 = Math.min(w, bx * B + B), y1 = Math.min(h, by * B + B);
+    let m = 0;
+    for (let y = by * B; y < y1; y++) for (let x = bx * B; x < x1; x++) { const i = (y * w + x) * 4; hist[(px[i] + px[i + 1] + px[i + 2]) / 3 | 0]++; m++; }
+    let corte = 255, acum = 0;
+    while (corte > 0 && (acum += hist[corte]) < m * 0.1) corte--;          // lo más claro: el papel
+    let r = 0, g = 0, b = 0, k = 0;
+    for (let y = by * B; y < y1; y++) for (let x = bx * B; x < x1; x++) {
+      const i = (y * w + x) * 4;
+      if ((px[i] + px[i + 1] + px[i + 2]) / 3 >= corte) { r += px[i]; g += px[i + 1]; b += px[i + 2]; k++; }
+    }
+    const j = by * bw + bx;
+    fondo[0][j] = r / k; fondo[1][j] = g / k; fondo[2][j] = b / k;
+  }
+  // las zonas sin papel (logotipos, sellos, tablas llenas) son más oscuras que una superficie suave
+  // que pasa por las demás: se ajusta una superficie de grado 2 quitando las que quedan muy abajo
+  const nb = bw * bh, usa = new Uint8Array(nb).fill(1), sup = [new Float32Array(nb), new Float32Array(nb), new Float32Array(nb)];
+  const base = (j) => { const x = (j % bw) / bw - 0.5, y = Math.floor(j / bw) / bh - 0.5; return [1, x, y, x * x, x * y, y * y]; };
+  for (let vuelta = 0; vuelta < 5; vuelta++) {
+    for (let c = 0; c < 3; c++) {
+      const A = Array.from({ length: 6 }, () => new Float64Array(7));
+      for (let j = 0; j < nb; j++) if (usa[j]) {
+        const f = base(j);
+        for (let p = 0; p < 6; p++) { for (let q = 0; q < 6; q++) A[p][q] += f[p] * f[q]; A[p][6] += f[p] * fondo[c][j]; }
+      }
+      for (let p = 0; p < 6; p++) A[p][p] += 1e-6;
+      for (let p = 0; p < 6; p++) for (let r = 0; r < 6; r++) if (r !== p) { const f = A[r][p] / A[p][p]; for (let q = p; q < 7; q++) A[r][q] -= f * A[p][q]; }
+      const co = A.map((fila, p) => fila[6] / fila[p]);
+      for (let j = 0; j < nb; j++) { const f = base(j); let s = 0; for (let p = 0; p < 6; p++) s += co[p] * f[p]; sup[c][j] = s; }
+    }
+    for (let j = 0; j < nb; j++) {
+      const l = (fondo[0][j] + fondo[1][j] + fondo[2][j]) / 3, s = (sup[0][j] + sup[1][j] + sup[2][j]) / 3;
+      usa[j] = l > s * 0.9 ? 1 : 0;
+    }
+  }
+  // zona con papel: su propio color (sigue sombras locales); sin papel: la superficie. Luego se suaviza.
+  for (let c = 0; c < 3; c++) {
+    const t = new Float32Array(nb);
+    for (let j = 0; j < nb; j++) t[j] = usa[j] ? Math.max(fondo[c][j], sup[c][j] * 0.9) : sup[c][j];
+    for (let j = 0; j < nb; j++) {
+      const bx = j % bw, by = Math.floor(j / bw);
+      let s = 0, k = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const x = bx + dx, y = by + dy;
+        if (x >= 0 && y >= 0 && x < bw && y < bh) { s += t[y * bw + x]; k++; }
+      }
+      fondo[c][j] = Math.max(30, s / k);
+    }
+  }
+  // curva: el papel (≥ 93 % de su fondo) queda blanco; lo que baje de 30 %, negro; en medio, oscurecido
+  // (así las marcas de agua tenues se siguen viendo)
+  const curva = new Uint8Array(1001);
+  for (let i = 0; i <= 1000; i++) { const t = Math.min(1, Math.max(0, (i / 1000 - 0.3) / (0.93 - 0.3))); curva[i] = Math.round(255 * Math.pow(t, 1.35)); }
+  const val = (v) => curva[v >= 1 ? 1000 : v <= 0 ? 0 : (v * 1000) | 0];
+  const f0 = fondo[0], f1 = fondo[1], f2 = fondo[2];
+  for (let y = 0; y < h; y++) {
+    const gy = Math.min(bh - 1, Math.max(0, (y + 0.5) / B - 0.5)), y0 = Math.min(bh - 2, gy | 0), ay = bh > 1 ? gy - y0 : 0, r0 = Math.max(0, y0) * bw, r1 = Math.min(bh - 1, y0 + 1) * bw;
+    for (let x = 0; x < w; x++) {
+      const gx = Math.min(bw - 1, Math.max(0, (x + 0.5) / B - 0.5)), x0 = Math.min(bw - 2, gx | 0), ax = bw > 1 ? gx - x0 : 0, c0 = Math.max(0, x0), c1 = Math.min(bw - 1, x0 + 1);
+      const fb = (f) => (f[r0 + c0] * (1 - ax) + f[r0 + c1] * ax) * (1 - ay) + (f[r1 + c0] * (1 - ax) + f[r1 + c1] * ax) * ay;
+      const i = (y * w + x) * 4, r = px[i] / fb(f0), g = px[i + 1] / fb(f1), b = px[i + 2] / fb(f2);
+      if (modo === "color") {
+        // la tinta de color (firmas azules, sellos) se aviva un poco
+        const Y = 0.299 * r + 0.587 * g + 0.114 * b, k = 1.5;
+        px[i] = val(Y + (r - Y) * k); px[i + 1] = val(Y + (g - Y) * k); px[i + 2] = val(Y + (b - Y) * k);
+      } else {
+        const Y = 0.299 * r + 0.587 * g + 0.114 * b, v = modo === "bn" ? (Y < 0.68 ? 0 : 255) : val(Y);
+        px[i] = px[i + 1] = px[i + 2] = v;
+      }
+    }
+  }
+}
+
+// ---- la herramienta
+// Cada foto: se abre una vez para hacer su vista (≤ 1400 px, para el editor) y buscar la hoja en
+// una copia de 500 px. Al crear el PDF se vuelve a abrir y se achica solo lo necesario para que la
+// hoja enderezada salga de ≤ 3300 px de lado (unos 300 ppp en carta, como Adobe Scan).
+const ESQ_TODA = [[0, 0], [1, 0], [1, 1], [0, 1]], ESQ_DEFECTO = [[0.06, 0.06], [0.94, 0.06], [0.94, 0.94], [0.06, 0.94]];
+let selES = null, buscandoES = false;
+const listaES = listaImagenes("ES", {
+  girar: true,
+  dato: (x) => x.falla ? x.falla : !x.esq ? "Buscando la hoja…" : x.encontrada ? (x.giro ? `Hoja encontrada · girada ${LADOS[x.giro]}` : "Hoja encontrada") : "Acomoda las esquinas",
+  alCambiar: () => {
+    if (selES && !listaES.items.includes(selES)) selES = null;
+    if (!selES && listaES.items.length) elegirES(listaES.items.find((x) => x.esq) || null);
+    for (const x of listaES.items) x.li.classList.toggle("elegida", x === selES);
+    $("editorES").hidden = !selES;
+    $("opcionesES").hidden = !listaES.items.length;
+    buscarHojas();
+  },
+});
+async function buscarHojas() {
+  if (buscandoES) return;
+  buscandoES = true;
+  try {
+    for (let x; (x = listaES.items.find((y) => !y.esq && !y.mala && !y.falla));) {
+      try {
+        const mapa = await abrirImagen(x.f);
+        x.W = mapa.width; x.H = mapa.height;
+        const e = Math.min(1, 1400 / Math.max(x.W, x.H)), vista = escalar(mapa, Math.round(x.W * e), Math.round(x.H * e));
+        const lienzo = vista instanceof HTMLCanvasElement ? vista : (() => { const c = lienzoNuevo(vista.width, vista.height); c.getContext("2d").drawImage(vista, 0, 0); return c; })();
+        mapa.close();
+        x.vista = URL.createObjectURL(await new Promise((ok) => lienzo.toBlob(ok, "image/jpeg", 0.85)));
+        const e2 = Math.min(1, 500 / Math.max(lienzo.width, lienzo.height)), chico = escalar(lienzo, Math.max(1, Math.round(lienzo.width * e2)), Math.max(1, Math.round(lienzo.height * e2)));
+        const datos = chico.getContext("2d").getImageData(0, 0, chico.width, chico.height).data;
+        const esq = detectarHoja(datos, chico.width, chico.height);
+        lienzo.width = 0; if (chico !== lienzo) chico.width = 0;
+        x.encontrada = !!esq;
+        x.esq = esq || ESQ_DEFECTO.map((p) => [...p]);
+        x.esqAuto = x.esq.map((p) => [...p]);
+      } catch (e) {
+        x.falla = String(e && e.message || e).length > 60 ? "No se pudo abrir" : String(e && e.message || e);
+      }
+      if (!selES && x.esq) elegirES(x);
+      listaES.pintar();
+      await pintar();
+    }
+  } finally { buscandoES = false; }
+}
+function elegirES(x) {
+  selES = x;
+  if (!x) return;
+  if ($("imgES").dataset.url !== x.vista) { $("imgES").src = x.vista; $("imgES").dataset.url = x.vista; }
+  $("ayudaES").textContent = x.encontrada ? "Revisa que los 4 puntos estén en las esquinas de la hoja; si no, arrástralos." : "No encontré la orilla de la hoja: arrastra los 4 puntos a sus esquinas.";
+  pintarEsqES();
+}
+function pintarEsqES() {
+  if (!selES) return;
+  const q = selES.esq, pts = q.map(([x, y]) => `${x} ${y}`);
+  $("fueraES").setAttribute("d", `M0 0H1V1H0Z M${pts.join(" L")} Z`);
+  $("bordeES").setAttribute("points", pts.join(" "));
+  $("mesaES").querySelectorAll(".escaner-esquina").forEach((el, i) => { el.style.left = q[i][0] * 100 + "%"; el.style.top = q[i][1] * 100 + "%"; });
+}
+$("listaES").addEventListener("click", (e) => {
+  const li = e.target.closest("li");
+  if (!li || e.target.closest("button")) return;
+  const x = listaES.items.find((y) => y.li === li);
+  if (x && x.esq) { elegirES(x); listaES.pintar(); $("editorES").scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+});
+$("mesaES").querySelectorAll(".escaner-esquina").forEach((el) => {
+  const i = Number(el.dataset.i);
+  arrastrar(el, () => [...selES.esq[i]], (dx, dy, ini) => { selES.esq[i] = [entre(ini[0] + dx, 0, 1), entre(ini[1] + dy, 0, 1)]; pintarEsqES(); }, $("mesaES"));
+});
+$("todaES").onclick = () => { if (selES) { selES.esq = ESQ_TODA.map((p) => [...p]); pintarEsqES(); } };
+$("buscarES").onclick = () => { if (selES) { selES.esq = selES.esqAuto.map((p) => [...p]); pintarEsqES(); } };
+
+// La hoja de la foto x enderezada y con el filtro, en un canvas
+async function escanearFoto(x, modo) {
+  const mapa = await abrirImagen(x.f), w = mapa.width, h = mapa.height, q = x.esq.map(([a, b]) => [a * w, b * h]);
+  let [ow, oh] = medidaHoja(q);
+  const k = Math.min(1, 3300 / Math.max(ow, oh));
+  ow = Math.max(8, Math.round(ow * k)); oh = Math.max(8, Math.round(oh * k));
+  const s = Math.min(1, k * 1.15), W = Math.round(w * s), H = Math.round(h * s);
+  let fuente = escalar(mapa, W, H);
+  if (!(fuente instanceof HTMLCanvasElement)) { const c = lienzoNuevo(W, H); c.getContext("2d").drawImage(fuente, 0, 0); fuente = c; }
+  mapa.close();
+  const src = fuente.getContext("2d").getImageData(0, 0, W, H).data;
+  fuente.width = 0;
+  const out = enderezar(src, W, H, q.map(([a, b]) => [a * W / w, b * H / h]), ow, oh);
+  filtroDocumento(out, ow, oh, modo);
+  let c = lienzoNuevo(ow, oh);
+  c.getContext("2d").putImageData(new ImageData(out, ow, oh), 0, 0);
+  if (x.giro) { const g = transformar(c, x.giro); c.width = 0; c = g; }
+  return c;
+}
+$("botonES").onclick = async () => {
+  const fotos = listaES.items.filter((x) => !x.mala && !x.falla);
+  if (fotos.some((x) => !x.esq)) { aviso("avisoES", "Espera a que termine de buscar las hojas.", true); return; }
+  if (!fotos.length) return;
+  $("botonES").disabled = true;
+  $("salidaES").textContent = "";
+  try {
+    const { PDFDocument } = await pdfLib();
+    const doc = await PDFDocument.create(), modo = $("filtroES").value, hoja = $("hojaES").value;
+    for (const [k, x] of fotos.entries()) {
+      aviso("avisoES", fotos.length > 1 ? `Hoja ${k + 1} de ${fotos.length}…` : "Trabajando…");
+      await pintar();
+      const c = await escanearFoto(x, modo), horiz = c.width > c.height;
+      const img = await doc.embedJpg(await guardarImagen(c, "jpg", 0.8));
+      let pw, ph;
+      if (hoja === "documento") [pw, ph] = horiz ? [612 * c.width / c.height, 612] : [612, 612 * c.height / c.width];
+      else { [pw, ph] = HOJAS[hoja]; if (horiz) [pw, ph] = [ph, pw]; }
+      c.width = 0;
+      doc.addPage([pw, ph]).drawImage(img, { x: 0, y: 0, width: pw, height: ph });
+    }
+    filaDescarga($("salidaES"), await doc.save(), `${sinExtImg(fotos[0].f.name)} (escaneado).pdf`, paginasTxt(fotos.length));
+    aviso("avisoES", "Listo. Si quieres que se pueda buscar el texto, pásalo después por «Reconocer texto».");
+    $("salidaES").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } catch (e) {
+    aviso("avisoES", String(e && e.message || e), true);
+  } finally {
+    $("botonES").disabled = false;
+  }
 };
 
 $("botonPreparar").onclick = () => preparar().catch(() => {});
