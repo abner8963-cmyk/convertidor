@@ -2,7 +2,7 @@
 
 Ya hecho: 24 herramientas, una página por herramienta para Google (generar.py), nombre Navaja PDF.
 
-## Fase 1 — Tanda rápida (sin servidor)
+## Fase 1 — Tanda rápida (sin servidor) ✅ HECHA 2026-11-19
 1. Recortar PDF (márgenes o una zona; CropBox con pdf-lib)
 2. Reparar PDF (qpdf, ya incluido)
 3. Llenar formularios PDF (pdf-lib)

@@ -54,6 +54,36 @@ resaltar, y agregar líneas, rectángulos, óvalos e imágenes. PDF.js muestra l
 coloca tocándola; pdf-lib la dibuja en el mismo lugar. No cambia el texto que ya trae el PDF, y lo
 tapado con blanco sigue dentro del archivo.
 
+También se puede dibujar a mano libre («✎ Dibujar»): cada trazo queda como un objeto que se mueve,
+estira o quita, y se guarda como líneas en el PDF. En «Organizar páginas» se agregan hojas en blanco.
+
+## Recortar PDF
+
+Cambia el recuadro visible de las páginas (CropBox y MediaBox). «Quitar los márgenes blancos» dibuja
+cada hoja con PDF.js y busca dónde hay tinta; «a mano» usa la misma zona en las páginas elegidas.
+Lo que queda fuera se esconde pero sigue dentro del archivo.
+
+## Reparar PDF
+
+Del mejor intento al último recurso: qpdf lo reescribe si lo lee sin errores; pdf-lib lo lee objeto
+por objeto sin hacer caso del índice dañado; si se perdió el final (descarga a medias), se buscan las
+páginas sueltas —también dentro de los flujos de objetos comprimidos— y se les arma catálogo y árbol
+de páginas nuevos (se quitan las que perdieron su contenido); al final, PDF.js dibuja cada página y
+se arma un PDF de imágenes. Ojo: el qpdf compilado para el navegador no reconstruye archivos dañados
+(sin manejo de excepciones se detiene en el primer error), por eso existe el reconstructor propio.
+
+## Llenar formularios
+
+PDF.js dice dónde está cada campo (texto, casilla, opción, lista); se ponen controles HTML encima de
+la hoja y pdf-lib escribe los valores en los campos. «Dejarlo fijo» aplana el formulario (pdf-lib
+deja referencias a los campos borrados en `Annots`; se limpian). Los XFA dinámicos no se pueden.
+
+## Sacar imágenes
+
+Recorre los recursos de cada página (y de sus Form XObjects). Los JPG salen tal cual (sus bytes);
+gris, RGB, CMYK, paleta, 1–16 bits, máscaras y SMask se decodifican y salen en PNG. JBIG2 y CCITT
+(escaneos en blanco y negro) no: para esos, «PDF a imágenes».
+
 ## Herramientas de imagen
 
 Comprimir, cambiar tamaño, recortar, convertir (JPG, PNG, WebP) y girar imágenes, sin librerías:

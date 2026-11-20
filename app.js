@@ -364,7 +364,8 @@ async function iniciarOffice() {
 
 // ---------------------------------------------------------------- 5. menú de herramientas
 const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr", "firmar", "editar",
-  "comprimir-imagen", "cambiar-tamano", "recortar", "convertir-imagen", "girar-imagen", "escanear"];
+  "comprimir-imagen", "cambiar-tamano", "recortar", "convertir-imagen", "girar-imagen", "escanear",
+  "recortarpdf", "reparar", "formulario", "sacarimagenes"];
 // Cada herramienta tiene su propia dirección (…/unir-pdf/); las páginas las genera
 // generar.py y todas traen la app completa, así que cambiar de herramienta no recarga.
 const RUTAS = JSON.parse($("rutas").textContent);          // { "unir-pdf": { v: "unir", t: "título" }, "": {…} }
@@ -585,6 +586,13 @@ const alVerse = new IntersectionObserver((vistas) => {
 function pintarHoja(h) {       // una a la vez, para no trabar el celular
   colaPintar = colaPintar.then(async () => {
     if (!hojas.includes(h)) return;
+    const lienzo0 = h.li.querySelector("canvas");
+    if (h.fuente.blanca) {           // hoja en blanco: solo un rectángulo blanco de su forma
+      const [w, hh] = h.fuente.tam, e = 240 / Math.max(w, hh);
+      lienzo0.width = Math.round(w * e); lienzo0.height = Math.round(hh * e);
+      const c = lienzo0.getContext("2d"); c.fillStyle = "#fff"; c.fillRect(0, 0, lienzo0.width, lienzo0.height);
+      return;
+    }
     const pagina = await h.fuente.vista.getPage(h.i + 1);
     const base1 = pagina.getViewport({ scale: 1 });
     const v = pagina.getViewport({ scale: 240 / Math.max(base1.width, base1.height) });
@@ -605,7 +613,7 @@ function crearHoja(fuente, i) {
   li.draggable = true;
   li.innerHTML = `<div class="hoja"><canvas width="85" height="110"></canvas></div><div class="num"></div>
     <div class="botones"><button data-a="izq" aria-label="Mover antes">←</button><button data-a="girar" aria-label="Girar">↻</button><button data-a="quitar" aria-label="Quitar">✕</button><button data-a="der" aria-label="Mover después">→</button></div>`;
-  li.title = `${fuente.nombre}, página ${i + 1}`;
+  li.title = fuente.blanca ? "Hoja en blanco" : `${fuente.nombre}, página ${i + 1}`;
   li.onclick = (e) => {
     const a = e.target.closest("button")?.dataset.a;
     const k = hojas.indexOf(h);
@@ -658,6 +666,21 @@ zonaDeArchivos($("zonaOrg"), $("archivosOrg"), async (fs) => {
   acomodarOrg();
   if (fallas.length) aviso("avisoOrg", fallas.join(" "), true);
 });
+// Una hoja en blanco al final, del tamaño de la última (como se ve, ya girada); sin páginas, carta
+$("blancaOrg").onclick = async () => {
+  let tam = [612, 792];
+  const ultima = hojas[hojas.length - 1];
+  if (ultima) {
+    if (ultima.fuente.blanca) tam = [...ultima.fuente.tam];
+    else { const v = (await ultima.fuente.vista.getPage(ultima.i + 1)).getViewport({ scale: 1 }); tam = [v.width, v.height]; }
+    if (ultima.giro % 180) tam.reverse();
+  }
+  const h = crearHoja({ blanca: true, tam, nombre: "Hoja en blanco" }, 0);
+  hojas.push(h);
+  acomodarOrg();
+  aviso("avisoOrg", `Hoja en blanco agregada al final (página ${hojas.length}). Arrástrala o muévela con las flechas a donde la quieras.`);
+  h.li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+};
 $("girarTodasOrg").onclick = () => { for (const h of hojas) h.giro = (h.giro + 90) % 360; acomodarOrg(); };
 $("limpiarOrg").onclick = () => { hojas.length = 0; $("paginasOrg").textContent = ""; acomodarOrg(); };
 $("guardarOrg").onclick = async () => {
@@ -669,6 +692,7 @@ $("guardarOrg").onclick = async () => {
     // Cada archivo se copia de una sola vez: así las letras e imágenes que comparten sus páginas no se repiten
     const copias = new Map();
     for (const fuente of new Set(hojas.map((h) => h.fuente))) {
+      if (fuente.blanca) continue;
       try { fuente.lib ||= await PDFDocument.load(fuente.bytes); }
       catch { throw new Error(`«${fuente.nombre}» no se pudo procesar (puede estar protegido).`); }
       const suyas = hojas.filter((h) => h.fuente === fuente);
@@ -676,12 +700,13 @@ $("guardarOrg").onclick = async () => {
       suyas.forEach((h, k) => copias.set(h, hechas[k]));
     }
     for (const h of hojas) {
+      if (h.fuente.blanca) { salida.addPage(h.fuente.tam).setRotation(degrees(h.giro)); continue; }
       const pagina = copias.get(h);
       if (h.giro) pagina.setRotation(degrees((pagina.getRotation().angle + h.giro) % 360));
       salida.addPage(pagina);
     }
     const bytes = await salida.save();
-    filaDescarga($("salidaOrg"), bytes, sinExt(hojas[0].fuente.nombre) + " (organizado).pdf", paginasTxt(hojas.length));
+    filaDescarga($("salidaOrg"), bytes, sinExt((hojas.find((h) => !h.fuente.blanca) || hojas[0]).fuente.nombre) + " (organizado).pdf", paginasTxt(hojas.length));
     acomodarOrg();
     aviso("avisoOrg", "Listo. Puedes seguir cambiando y guardar otra versión.");
   } catch (e) {
@@ -1277,7 +1302,7 @@ async function qpdf(args, entrada) {
   catch (e) { codigo = e && typeof e.status === "number" ? e.status : 2; }
   let salida = null;
   if (codigo === 0 || codigo === 3) try { salida = m.FS.readFile("/out.pdf"); } catch {}
-  return { codigo, salida, malaClave: codigo === 2 && /invalid password/i.test(dicho.join("\n")) };
+  return { codigo, salida, dicho, malaClave: codigo === 2 && /invalid password/i.test(dicho.join("\n")) };
 }
 // 0 = pide contraseña (o la que se dio no es), 2 = no está protegido, 3 = protegido pero abre sin contraseña
 async function pideClave(bytes, clave = "") {
@@ -2165,20 +2190,23 @@ const objetos = [];
 let armada = null, elegido = null, imagenArmada = null, zoomEd = 1;
 const FORMAS = { rect: [150, 60], ovalo: [150, 60], tapar: [150, 18], resaltar: [150, 18], linea: [150, 14], paloma: [16, 16], cruz: [16, 16] };   // tamaño al ponerlas, en puntos
 const TRAZOS = { paloma: [[[5, 55], [38, 90], [95, 10]]], cruz: [[[8, 8], [92, 92]], [[92, 8], [8, 92]]] };      // en un cuadro de 100 × 100
-const CON_COLOR = ["texto", "rect", "ovalo", "linea", "paloma", "cruz"], CON_GROSOR = ["rect", "ovalo", "linea", "paloma", "cruz"];
-const NOMBRES = { texto: "el texto", paloma: "la palomita", cruz: "la cruz", tapar: "el recuadro blanco", resaltar: "el resaltado", linea: "la línea", rect: "el rectángulo", ovalo: "el óvalo", imagen: "la imagen" };
+const CON_COLOR = ["texto", "rect", "ovalo", "linea", "paloma", "cruz", "trazo"], CON_GROSOR = ["rect", "ovalo", "linea", "paloma", "cruz", "trazo"];
+const NOMBRES = { trazo: "tu dibujo", texto: "el texto", paloma: "la palomita", cruz: "la cruz", tapar: "el recuadro blanco", resaltar: "el resaltado", linea: "la línea", rect: "el rectángulo", ovalo: "el óvalo", imagen: "la imagen" };
 // Un punto de la hoja como se ve (medido desde abajo a la izquierda) → sus coordenadas en el PDF
 function aPdf(p, vx, vy) {
   const c = p.getCropBox(), r = giroDe(p);
   return r === 90 ? [c.x + c.width - vy, c.y + vx] : r === 180 ? [c.x + c.width - vx, c.y + c.height - vy]
     : r === 270 ? [c.x + vy, c.y + c.height - vx] : [c.x + vx, c.y + vy];
 }
+// Un dibujo a mano guarda sus puntos como 0–100 dentro de su propio recuadro (así se mueve y estira igual que una forma)
+const caminoTrazo = (o) => "M" + o.puntos.map((q) => q[0].toFixed(2) + " " + q[1].toFixed(2)).join("L");
 const lineasDe = (o) => { const l = o.texto.replace(/ |\t/g, " ").replace(/\r/g, "").split("\n"); while (l.length && !l[l.length - 1].trim()) l.pop(); return l; };
 
 function armar(t) {
   armada = t;
   for (const b of $("herrEd").children) b.classList.toggle("armada", b.dataset.t === t);
-  aviso("avisoEd", t ? `Toca la hoja donde va ${NOMBRES[t]}.` : "");
+  mesaEd.classList.toggle("dibujando", t === "trazo");
+  aviso("avisoEd", t === "trazo" ? "Dibuja sobre la hoja con el dedo o el ratón. Cuando acabes, toca «✎ Dibujar» otra vez." : t ? `Toca la hoja donde va ${NOMBRES[t]}.` : "");
 }
 function elegir(o) {
   for (const v of objetos.filter((v) => v.t === "texto" && v !== o && !v.texto.trim())) objetos.splice(objetos.indexOf(v), 1);   // textos que se quedaron vacíos
@@ -2197,6 +2225,7 @@ function crearObjeto(o) {
   el._o = o;
   const dentro = o.t === "texto" ? `<span class="agarre" aria-hidden="true">✥</span><div class="texto"></div>`
     : o.t === "imagen" ? `<img alt="">` : o.t === "linea" ? `<i></i>`
+    : o.t === "trazo" ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" d="${caminoTrazo(o)}"/></svg>`
     : TRAZOS[o.t] ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" d="${TRAZOS[o.t].map((t) => "M" + t.map((q) => q.join(" ")).join("L")).join("")}"/></svg>` : "";
   el.innerHTML = dentro + `<button type="button" aria-label="Quitar">✕</button>` + (o.t === "texto" ? "" : `<span class="asa"></span>`);
   const acomodar = () => {
@@ -2226,7 +2255,7 @@ function crearObjeto(o) {
     if (o.t === "imagen") el.querySelector("img").src = o.img.url;
     if (o.t === "rect" || o.t === "ovalo") el.style.border = `${pt(o.grosor)} solid ${o.color}`;
     if (o.t === "linea") { const i = el.querySelector("i"); i.style.height = pt(o.grosor); i.style.background = o.color; }
-    if (TRAZOS[o.t]) { const c = el.querySelector("path"); c.style.stroke = o.color; c.style.strokeWidth = pt(o.grosor); }
+    if (TRAZOS[o.t] || o.t === "trazo") { const c = el.querySelector("path"); c.style.stroke = o.color; c.style.strokeWidth = pt(o.grosor); }
     arrastrar(el, () => ({ x: o.x, y: o.y }), mover, mesaEd);
     arrastrar(el.querySelector(".asa"), () => ({ w: o.w, h: o.h }), (dx, dy, ini) => { o.w = ini.w + dx; o.h = ini.h + dy; acomodar(); }, mesaEd);
   }
@@ -2310,9 +2339,48 @@ $("imagenEd").onchange = async (e) => {
     armar("imagen");
   } catch { aviso("avisoEd", `«${f.name}» no se pudo abrir como imagen.`, true); }
 };
+// Dibujar a mano: mientras se arrastra se ve una línea provisional; al soltar queda como objeto
+lienzoEd.addEventListener("pointerdown", (e) => {
+  const a = paraEditar;
+  if (armada !== "trazo" || !a || !a.W || (e.pointerType === "mouse" && e.button)) return;
+  e.preventDefault();
+  lienzoEd.setPointerCapture(e.pointerId);
+  const r = lienzoEd.getBoundingClientRect(), puntos = [];
+  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"), camino = document.createElementNS(ns, "path");
+  svg.setAttribute("viewBox", "0 0 100 100"); svg.setAttribute("preserveAspectRatio", "none"); svg.classList.add("provisional");
+  Object.assign(camino.style, { stroke: $("colorEd").value, strokeWidth: `calc(var(--pt) * ${$("grosorEd").value})` });
+  camino.setAttribute("fill", "none"); camino.setAttribute("stroke-linecap", "round"); camino.setAttribute("stroke-linejoin", "round");
+  camino.setAttribute("vector-effect", "non-scaling-stroke");
+  svg.append(camino); mesaEd.append(svg);
+  const sumar = (ev) => {
+    const x = entre((ev.clientX - r.left) / r.width, 0, 1), y = entre((ev.clientY - r.top) / r.height, 0, 1), u = puntos[puntos.length - 1];
+    if (u && Math.hypot((x - u[0]) * r.width, (y - u[1]) * r.height) < 1.5) return;      // menos de 1.5 px: no hace falta
+    puntos.push([x, y]);
+    camino.setAttribute("d", "M" + puntos.map((q) => q[0] * 100 + " " + q[1] * 100).join("L"));
+  };
+  const mover = (ev) => { for (const x of ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev]) sumar(x); };
+  sumar(e);
+  const fin = () => {
+    lienzoEd.removeEventListener("pointermove", mover); lienzoEd.removeEventListener("pointerup", fin); lienzoEd.removeEventListener("pointercancel", fin);
+    svg.remove();
+    if (puntos.length === 1) puntos.push([puntos[0][0] + 0.5 / a.W, puntos[0][1]]);       // un toque: un punto
+    // Recuadro del trazo, de al menos 4 puntos de lado (una raya derecha no tiene alto)
+    const xs = puntos.map((q) => q[0]), ys = puntos.map((q) => q[1]);
+    let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const mw = 4 / a.W, mh = 4 / a.H;
+    if (x1 - x0 < mw) { const c = (x0 + x1) / 2; x0 = c - mw / 2; x1 = c + mw / 2; }
+    if (y1 - y0 < mh) { const c = (y0 + y1) / 2; y0 = c - mh / 2; y1 = c + mh / 2; }
+    const o = { t: "trazo", i: a.i, color: $("colorEd").value, grosor: Number($("grosorEd").value), x: x0, y: y0, w: x1 - x0, h: y1 - y0,
+      puntos: puntos.map((q) => [(q[0] - x0) / (x1 - x0) * 100, (q[1] - y0) / (y1 - y0) * 100]) };
+    objetos.push(o);
+    mesaEd.append(crearObjeto(o));
+    elegir(o);
+  };
+  lienzoEd.addEventListener("pointermove", mover); lienzoEd.addEventListener("pointerup", fin); lienzoEd.addEventListener("pointercancel", fin);
+});
 lienzoEd.onclick = (e) => {
   const a = paraEditar;
-  if (!a || !a.W) return;
+  if (!a || !a.W || armada === "trazo") return;
   if (!armada) {
     if (elegido) elegir(null); else aviso("avisoEd", "Elige arriba qué quieres poner (texto, palomita, tapar…) y luego toca la hoja.");
     return;
@@ -2382,6 +2450,13 @@ $("botonEd").onclick = async () => {
         if (!imagenes.has(o.img.f)) imagenes.set(o.img.f, await imagenParaPdf(doc, o.img.f));
         alto = ancho * o.img.h / o.img.w;
       } else if (TRAZOS[o.t]) alto = ancho;
+      if (o.t === "trazo") {
+        const izq = o.x * W, arriba = H - o.y * H;
+        const punto = (q) => en(izq + q[0] / 100 * ancho, arriba - q[1] / 100 * alto);
+        for (let k = 1; k < o.puntos.length; k++)
+          p.drawLine({ start: punto(o.puntos[k - 1]), end: punto(o.puntos[k]), thickness: o.grosor, color: color(o.color), lineCap: L.LineCapStyle.Round });
+        continue;
+      }
       const izq = o.x * W, abajo = H - o.y * H - alto, cx = izq + ancho / 2, cy = abajo + alto / 2, g = o.grosor;
       if (o.t === "imagen") p.drawImage(imagenes.get(o.img.f), { ...colocar(L, p, cx, cy, ancho, alto, 0), width: ancho, height: alto });
       else if (o.t === "tapar") p.drawRectangle({ ...colocar(L, p, cx, cy, ancho, alto, 0), width: ancho, height: alto, color: L.rgb(1, 1, 1) });
@@ -3199,3 +3274,680 @@ $("archivos").onchange = (e) => { agregar([...e.target.files]); e.target.value =
 for (const ev of ["dragenter", "dragover"]) $("zona").addEventListener(ev, (e) => { e.preventDefault(); $("zona").classList.add("encima"); });
 for (const ev of ["dragleave", "drop"]) $("zona").addEventListener(ev, (e) => { e.preventDefault(); $("zona").classList.remove("encima"); });
 $("zona").addEventListener("drop", (e) => agregar([...e.dataTransfer.files]));
+
+// ---------------------------------------------------------------- 19. recortar PDF
+// Recortar es cambiar el recuadro visible de cada página (CropBox y MediaBox): el contenido no se
+// toca, solo cambia el pedazo de hoja que se ve y se imprime. «Quitar márgenes» dibuja cada hoja
+// chica con PDF.js y busca dónde empieza y dónde acaba lo que no es blanco.
+let paraRecortarPdf = null;                  // { f, vista, total, i }
+const recP = { x: 0.08, y: 0.08, w: 0.84, h: 0.84 };     // fracción de la hoja como se ve, desde arriba a la izquierda
+const modoRP = () => document.querySelector('input[name="modoRP"]:checked').value;
+function pintarRecorteP() {
+  for (const el of [$("cajaRP"), $("huecoRP")]) Object.assign(el.style, { left: recP.x * 100 + "%", top: recP.y * 100 + "%", width: recP.w * 100 + "%", height: recP.h * 100 + "%" });
+}
+arrastrar($("cajaRP"), () => ({ ...recP }), (dx, dy, ini) => {
+  recP.x = entre(ini.x + dx, 0, 1 - recP.w); recP.y = entre(ini.y + dy, 0, 1 - recP.h);
+  pintarRecorteP();
+}, $("mesaRP"));
+for (const asa of $("cajaRP").querySelectorAll(".asa")) {
+  const izq = asa.dataset.e.includes("w"), arriba = asa.dataset.e.includes("n");
+  arrastrar(asa, () => ({ ...recP }), (dx, dy, ini) => {
+    const fx = izq ? ini.x + ini.w : ini.x, fy = arriba ? ini.y + ini.h : ini.y;      // la esquina contraria no se mueve
+    const w = entre(izq ? ini.w - dx : ini.w + dx, 0.03, izq ? fx : 1 - fx), h = entre(arriba ? ini.h - dy : ini.h + dy, 0.03, arriba ? fy : 1 - fy);
+    Object.assign(recP, { w, h, x: izq ? fx - w : fx, y: arriba ? fy - h : fy });
+    pintarRecorteP();
+  }, $("mesaRP"));
+}
+let turnoRP = 0;
+async function pintarHojaRP() {
+  const a = paraRecortarPdf, turno = ++turnoRP;
+  if (!a) return;
+  $("antesRP").disabled = a.i === 0; $("despuesRP").disabled = a.i === a.total - 1;
+  $("paginaRP").textContent = `Página ${a.i + 1} de ${a.total}`;
+  const pagina = await a.vista.getPage(a.i + 1), b = pagina.getViewport({ scale: 1 });
+  const v = pagina.getViewport({ scale: Math.min(1600, 700 * Math.min(devicePixelRatio || 1, 2)) / Math.max(b.width, b.height) });
+  const nuevo = lienzoNuevo(Math.round(v.width), Math.round(v.height));
+  await pagina.render({ canvasContext: nuevo.getContext("2d"), viewport: v }).promise;
+  if (turno !== turnoRP) return;
+  const c = $("lienzoRP");
+  c.width = nuevo.width; c.height = nuevo.height;
+  c.getContext("2d").drawImage(nuevo, 0, 0);
+  pintarRecorteP();
+}
+$("antesRP").onclick = () => { paraRecortarPdf.i--; pintarHojaRP(); };
+$("despuesRP").onclick = () => { paraRecortarPdf.i++; pintarHojaRP(); };
+for (const r of document.querySelectorAll('input[name="modoRP"]')) r.onchange = () => {
+  const mano = modoRP() === "mano";
+  $("manoRP").hidden = !mano; $("campoMargenRP").hidden = mano;
+  if (mano) pintarHojaRP();
+};
+zonaDeArchivos($("zonaRP"), $("archivoRP"), async (fs) => {
+  const f = fs.find(esPdf);
+  if (!f) { $("infoRP").textContent = "Ese archivo no es un PDF."; return; }
+  $("infoRP").textContent = "Abriendo…";
+  try {
+    await abrirPdf(f);                       // para avisar a tiempo si tiene contraseña o no es PDF
+    const vista = await (await pdfJs()).getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+    if (paraRecortarPdf) paraRecortarPdf.vista.destroy();
+    paraRecortarPdf = { f, vista, total: vista.numPages, i: 0 };
+    Object.assign(recP, { x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
+    $("infoRP").textContent = `${f.name} · ${paginasTxt(vista.numPages)}`;
+    $("opcionesRP").hidden = false;
+    aviso("avisoRP", "");
+    if (modoRP() === "mano") await pintarHojaRP();
+  } catch (e) {
+    paraRecortarPdf = null;
+    $("opcionesRP").hidden = true;
+    $("infoRP").textContent = String(e && e.message || e);
+  }
+});
+// Dónde hay algo que no es blanco en la hoja → { x0, y0, x1, y1 } como fracción (desde arriba a la izquierda), o null si está en blanco
+const lienzoMargen = document.createElement("canvas");
+async function tintaDe(pagina) {
+  const b = pagina.getViewport({ scale: 1 }), v = pagina.getViewport({ scale: Math.min(3, 1400 / Math.max(b.width, b.height)) });
+  const W = lienzoMargen.width = Math.max(1, Math.round(v.width)), H = lienzoMargen.height = Math.max(1, Math.round(v.height));
+  const ctx = lienzoMargen.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  await pagina.render({ canvasContext: ctx, viewport: v }).promise;
+  const d = ctx.getImageData(0, 0, W, H).data, filas = new Uint32Array(H), cols = new Uint32Array(W);
+  for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i += 4)
+    if (d[i] < 232 || d[i + 1] < 232 || d[i + 2] < 232) { filas[y]++; cols[x]++; }
+  // Un renglón o columna cuenta si tiene al menos 2 puntos con tinta (así no manda una mota suelta)
+  const primero = (a) => a.findIndex((n) => n >= 2), ultimo = (a) => a.length - 1 - [...a].reverse().findIndex((n) => n >= 2);
+  const y0 = primero(filas), x0 = primero(cols);
+  if (y0 < 0 || x0 < 0) return null;
+  return { x0: x0 / W, y0: y0 / H, x1: (ultimo(cols) + 1) / W, y1: (ultimo(filas) + 1) / H };
+}
+// Pone el recuadro visible de la página; r en puntos de la hoja como se ve (desde abajo a la izquierda)
+function ponerRecorte(L, p, r) {
+  const [ax, ay] = aPdf(p, r.izq, r.abajo), [bx, by] = aPdf(p, r.der, r.arriba);
+  const x = Math.min(ax, bx), y = Math.min(ay, by), w = Math.abs(bx - ax), h = Math.abs(by - ay);
+  p.setCropBox(x, y, w, h);
+  p.setMediaBox(x, y, w, h);
+  for (const k of ["BleedBox", "TrimBox", "ArtBox"]) p.node.delete(L.PDFName.of(k));
+}
+$("botonRP").onclick = async () => {
+  const a = paraRecortarPdf;
+  if (!a) return;
+  $("botonRP").disabled = true;
+  try {
+    const cuales = [...new Set(leerRangos($("paginasRP").value, a.total).flat())];
+    const L = await pdfLib(), doc = await abrirPdf(a.f), mano = modoRP() === "mano", m = Number($("margenRP").value);
+    let hechas = 0, blancas = 0;
+    for (const [k, i] of cuales.entries()) {
+      if (!mano && k % 5 === 0) { aviso("avisoRP", `Buscando los márgenes: página ${k + 1} de ${cuales.length}…`); await pintar(); }
+      const p = doc.getPage(i), [W, H] = tamVisible(p);
+      let r;
+      if (mano) r = { izq: recP.x * W, der: (recP.x + recP.w) * W, arriba: H - recP.y * H, abajo: H - (recP.y + recP.h) * H };
+      else {
+        const t = await tintaDe(await a.vista.getPage(i + 1));
+        if (!t) { blancas++; continue; }
+        r = { izq: Math.max(0, t.x0 * W - m), der: Math.min(W, t.x1 * W + m), arriba: Math.min(H, H - t.y0 * H + m), abajo: Math.max(0, H - t.y1 * H - m) };
+        if (r.der - r.izq > W - 2 && r.arriba - r.abajo > H - 2) continue;      // ya no tiene márgenes que quitar
+      }
+      if (r.der - r.izq < 4 || r.arriba - r.abajo < 4) continue;
+      ponerRecorte(L, p, r);
+      hechas++;
+    }
+    if (!hechas) throw new Error(mano ? "El recuadro es demasiado chico." : "No encontré márgenes blancos que quitar en esas páginas.");
+    filaDescarga($("salidaRP"), await doc.save(), sinExt(a.f.name) + " (recortado).pdf", `${paginasTxt(hechas)} recortada${hechas === 1 ? "" : "s"}`);
+    aviso("avisoRP", "Listo." + (blancas ? ` ${blancas === 1 ? "Una hoja estaba" : blancas + " hojas estaban"} en blanco y se dejó igual.` : ""));
+  } catch (e) {
+    aviso("avisoRP", String(e && e.message || e), true);
+  } finally {
+    $("botonRP").disabled = false;
+  }
+};
+
+// ---------------------------------------------------------------- 20. reparar PDF
+// Del mejor intento al último recurso: (1) qpdf lo vuelve a escribir (sirve si el archivo se puede
+// leer pero otros programas se atoran); (2) pdf-lib lo lee objeto por objeto sin hacer caso del
+// índice dañado; (3) si se perdió el final (descarga a medias) o el índice de páginas, se buscan
+// las páginas sueltas en el archivo —también dentro de los flujos de objetos comprimidos— y se les
+// arma un índice nuevo; (4) PDF.js, que abre casi todo, dibuja cada página y se arma un PDF de
+// imágenes (se ve igual, pero el texto ya no se puede copiar).
+// (El qpdf del navegador no sabe reconstruir por su cuenta: se detiene en el primer error.)
+async function paginasQueAbre(bytes, estricto) {
+  try {
+    const v = await (await pdfJs()).getDocument({ data: bytes.slice(), stopAtErrors: estricto }).promise;
+    const n = v.numPages;
+    await v.getPage(1);
+    v.destroy();
+    return n;
+  } catch (e) {
+    if (e && e.name === "PasswordException") throw new Error("Este PDF tiene contraseña; quítasela primero con «Quitar contraseña».");
+    return 0;
+  }
+}
+// Busca en el texto del archivo los objetos «n g obj» (y los que van dentro de flujos ObjStm)
+async function objetosSueltos(bytes) {
+  const txt = new TextDecoder("latin1").decode(bytes), re = /(\d+)\s+(\d+)\s+obj\b/g, objs = [];
+  let m;
+  while ((m = re.exec(txt))) {
+    const ini = m.index + m[0].length, finObj = txt.indexOf("endobj", ini), finFlujo = txt.indexOf("stream", ini);
+    const fin = Math.min(...[finObj, finFlujo, ini + 20000].filter((x) => x > 0));
+    objs.push({ n: Number(m[1]), g: Number(m[2]), cuerpo: txt.slice(ini, fin), pos: m.index, conFlujo: finFlujo > 0 && finFlujo === fin });
+  }
+  const dentro = [];
+  for (const o of objs) {
+    if (!o.conFlujo || !/\/Type\s*\/ObjStm\b/.test(o.cuerpo)) continue;
+    try {
+      let a = o.pos + txt.slice(o.pos).indexOf("stream") + 6;
+      if (txt[a] === "\r") a++;
+      if (txt[a] === "\n") a++;
+      const z = txt.indexOf("endstream", a), n = Number(/\/N\s+(\d+)/.exec(o.cuerpo)[1]), primero = Number(/\/First\s+(\d+)/.exec(o.cuerpo)[1]);
+      if (!/\/Filter\s*\/FlateDecode/.test(o.cuerpo) || z < 0) continue;
+      // Si el flujo quedó cortado, DecompressionStream falla al final: se toma lo que alcanzó a salir
+      const partes = [], lector = new Blob([bytes.subarray(a, z)]).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
+      try { for (;;) { const { done, value } = await lector.read(); if (done) break; partes.push(value); } } catch { /* lo que alcanzó */ }
+      const d = new TextDecoder("latin1").decode(new Uint8Array(await new Blob(partes).arrayBuffer()));
+      const cab = d.slice(0, primero).trim().split(/\s+/).map(Number);
+      for (let k = 0; k < n && 2 * k + 1 < cab.length; k++) {
+        const ini = primero + cab[2 * k + 1], fin = 2 * k + 3 < cab.length ? primero + cab[2 * k + 3] : d.length;
+        dentro.push({ n: cab[2 * k], g: 0, cuerpo: d.slice(ini, fin), pos: o.pos + k / 1e4 });
+      }
+    } catch (e) { console.warn("Flujo de objetos ilegible", e); }
+  }
+  // Si un objeto aparece varias veces (archivos editados), vale la última versión
+  const porNum = new Map();
+  for (const o of [...objs, ...dentro].sort((x, y) => x.pos - y.pos)) porNum.set(o.n, o);
+  return { txt, todos: [...porNum.values()].sort((x, y) => x.pos - y.pos) };
+}
+// Le arma un índice nuevo: catálogo y árbol de páginas con las páginas encontradas, en el orden del archivo
+async function reconstruir(bytes) {
+  const { todos } = await objetosSueltos(bytes);
+  const paginas = todos.filter((o) => /\/Type\s*\/Page(?![a-zA-Z])/.test(o.cuerpo));
+  if (!paginas.length) return null;
+  const max = Math.max(...todos.map((o) => o.n)), arbol = max + 1, cat = max + 2;
+  const kids = paginas.map((o) => `${o.n} ${o.g} R`).join(" ");
+  const extra = `\nendstream\nendobj\n${arbol} 0 obj\n<< /Type /Pages /Kids [${kids}] /Count ${paginas.length} >>\nendobj\n`
+    + `${cat} 0 obj\n<< /Type /Catalog /Pages ${arbol} 0 R >>\nendobj\ntrailer\n<< /Size ${cat + 1} /Root ${cat} 0 R >>\nstartxref\n0\n%%EOF\n`;
+  const { PDFDocument, PDFName, PDFArray } = await pdfLib();
+  const unido = new Uint8Array(bytes.length + extra.length);
+  unido.set(bytes); unido.set(new TextEncoder().encode(extra), bytes.length);     // extra es solo ASCII
+  const doc = await PDFDocument.load(unido, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
+  if (doc.isEncrypted) return null;
+  // Las páginas apuntan a su índice viejo (que se perdió): ahora cuelgan del nuevo, con hoja carta si no dicen su tamaño
+  const ref = doc.catalog.get(PDFName.of("Pages")), nodo = doc.context.lookup(ref), hijos = nodo.lookup(PDFName.of("Kids"), PDFArray);
+  let perdidas = 0;
+  for (let k = hijos.size() - 1; k >= 0; k--) {
+    const p = hijos.lookup(k);
+    if (!p || typeof p.set !== "function") { hijos.remove(k); continue; }
+    // Sin su contenido (quedó en la parte que se perdió) sería una hoja en blanco: se quita
+    const c = p.get(PDFName.of("Contents")), partes = c instanceof PDFArray ? c.asArray() : c ? [c] : [];
+    if (partes.length && partes.every((x) => !doc.context.lookup(x))) { hijos.remove(k); perdidas++; continue; }
+    p.set(PDFName.of("Parent"), ref);
+    if (!p.lookup(PDFName.of("MediaBox"))) p.set(PDFName.of("MediaBox"), doc.context.obj([0, 0, 612, 792]));
+    if (!p.lookup(PDFName.of("Resources"))) p.set(PDFName.of("Resources"), doc.context.obj({}));
+  }
+  nodo.set(PDFName.of("Count"), doc.context.obj(hijos.size()));
+  if (!hijos.size()) return null;
+  return { bytes: await doc.save(), perdidas };
+}
+async function rescatarComoImagenes(bytes, avance) {
+  const { PDFDocument } = await pdfLib(), vista = await (await pdfJs()).getDocument({ data: bytes.slice(), stopAtErrors: false }).promise;
+  const doc = await PDFDocument.create(), lienzo = document.createElement("canvas");
+  let fallidas = 0;
+  for (let i = 1; i <= vista.numPages; i++) {
+    avance(`Rescatando la página ${i} de ${vista.numPages}…`);
+    try {
+      const pagina = await vista.getPage(i), b = pagina.getViewport({ scale: 1 }), v = pagina.getViewport({ scale: Math.min(150 / 72, Math.sqrt(16e6 / (b.width * b.height))) });
+      lienzo.width = Math.round(v.width); lienzo.height = Math.round(v.height);
+      const c = lienzo.getContext("2d");
+      c.fillStyle = "#fff"; c.fillRect(0, 0, lienzo.width, lienzo.height);
+      await pagina.render({ canvasContext: c, viewport: v }).promise;
+      const img = await doc.embedJpg(await guardarImagen(lienzo, "jpg", 0.85));
+      doc.addPage([b.width, b.height]).drawImage(img, { x: 0, y: 0, width: b.width, height: b.height });
+    } catch (e) { fallidas++; console.warn("Página que no se pudo rescatar", i, e); }
+  }
+  vista.destroy();
+  if (!doc.getPageCount()) throw new Error("No se pudo rescatar ninguna página.");
+  return { bytes: await doc.save(), paginas: doc.getPageCount(), fallidas };
+}
+zonaDeArchivos($("zonaRep"), $("archivoRep"), async (fs) => {
+  const f = fs[0];
+  if (!f) return;
+  const decir = (t, error) => aviso("avisoRep", t, error);
+  try {
+    decir(`Revisando «${f.name}»…`);
+    await pintar();
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    if (!bytes.length) throw new Error(`«${f.name}» está vacío (0 bytes): no queda nada que reparar. Si te lo mandaron, pide que lo vuelvan a enviar.`);
+    if (!new TextDecoder("latin1").decode(bytes.subarray(0, 4096)).includes("%PDF")) throw new Error(`«${f.name}» no parece un PDF por dentro. Si lo bajaste de un correo o de WhatsApp, vuelve a descargarlo.`);
+    const nombre = sinExt(f.name) + " (reparado).pdf";
+    const maximo = await paginasQueAbre(bytes, false);        // las que PDF.js alcanza a ver, aunque esté dañado
+    const listo = (salida, n, texto) => { filaDescarga($("salidaRep"), salida, nombre, paginasTxt(n)); decir(texto); };
+    // 1. qpdf: solo si lee el archivo sin errores
+    decir("Revisando la estructura…");
+    await pintar();
+    const r = await qpdf(["/in.pdf", "/out.pdf"], bytes);
+    if (r.malaClave) throw new Error("Este PDF tiene contraseña; quítasela primero con «Quitar contraseña».");
+    if (r.codigo === 0 && r.salida) {
+      const n = await paginasQueAbre(r.salida, true);
+      if (n && n >= maximo) return listo(r.salida, n, "Este PDF no tenía errores en su estructura; igual se guardó una copia reescrita. Si un programa no lo abre, prueba con esta copia.");
+    }
+    // 2. pdf-lib, objeto por objeto
+    decir("Reparando…");
+    await pintar();
+    const { PDFDocument } = await pdfLib();
+    let n2 = 0, salida2 = null;
+    try {
+      const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
+      if (!doc.isEncrypted && doc.getPageCount()) { salida2 = await doc.save(); n2 = await paginasQueAbre(salida2, true); }
+    } catch (e) { console.warn("pdf-lib no pudo leerlo tal cual", e); }
+    if (n2 && n2 >= maximo) return listo(salida2, n2, "Listo: el archivo estaba dañado y se volvió a armar.");
+    // 3. índice nuevo con las páginas que se encuentren
+    let n3 = 0, salida3 = null, perdidas = 0;
+    try { const x = await reconstruir(bytes); if (x) { salida3 = x.bytes; perdidas = x.perdidas; n3 = await paginasQueAbre(salida3, true); } }
+    catch (e) { console.warn("No se pudo reconstruir", e); }
+    const nota3 = `Listo: se perdió el índice del archivo (pasa con descargas a medias) y se rearmó con ${paginasTxt(n3)}.`
+      + (perdidas ? ` Otras ${perdidas} se perdieron: su contenido estaba en la parte dañada o que no se descargó.` : "") + " Revisa que estén completas y en orden.";
+    if (n3 && n3 >= Math.max(maximo, n2)) return listo(salida3, n3, nota3);
+    if (n2 && n2 >= maximo) return listo(salida2, n2, "Listo: el archivo estaba dañado y se volvió a armar.");
+    // 4. rescate como imágenes
+    if (!maximo) {
+      if (n3 || n2) return n3 >= n2 ? listo(salida3, n3, nota3) : listo(salida2, n2, "Listo: se recuperó lo que se pudo.");
+      throw new Error(`«${f.name}» está demasiado dañado: no se encontró ninguna página que recuperar.`);
+    }
+    const x = await rescatarComoImagenes(bytes, decir);
+    filaDescarga($("salidaRep"), x.bytes, nombre, `${paginasTxt(x.paginas)} rescatadas como imagen`);
+    decir(`Listo, pero se rescató como imágenes: se ve igual, aunque el texto ya no se puede copiar (pásalo por «Reconocer texto» si lo necesitas).`
+      + (x.fallidas ? ` ${x.fallidas === 1 ? "Una página no se pudo" : x.fallidas + " páginas no se pudieron"} recuperar.` : ""));
+  } catch (e) {
+    decir(String(e && e.message || e), true);
+  }
+});
+
+// ---------------------------------------------------------------- 21. llenar formularios
+// PDF.js dice dónde está cada campo del formulario (y de qué tipo es); encima de cada hoja se ponen
+// recuadros de escribir, casillas y listas en ese lugar. Al guardar, pdf-lib escribe los valores en
+// los campos del PDF (siguen siendo campos: se pueden cambiar después, salvo que se deje fijo).
+let paraForm = null;            // { f, bytes, vista, campos: Map nombre → { tipo, valor, cambiado, controles: [] } }
+const alVerseFo = new IntersectionObserver((vistas) => {
+  for (const v of vistas) if (v.isIntersecting) { alVerseFo.unobserve(v.target); v.target._pintar(); }
+}, { rootMargin: "600px" });
+const tamFo = new ResizeObserver((cambios) => { for (const c of cambios) c.target.style.setProperty("--pt", c.target.clientWidth / c.target._ancho + "px"); });
+function controlDeCampo(a, campo, nombreGrupo) {
+  let el;
+  if (campo.tipo === "texto") {
+    el = document.createElement(a.multiLine ? "textarea" : "input");
+    if (!a.multiLine) el.type = "text";
+    if (a.maxLen) el.maxLength = a.maxLen;
+    el.value = campo.valor;
+    el.oninput = () => { campo.valor = el.value; campo.cambiado = true; for (const o of campo.controles) if (o !== el) o.value = el.value; };
+  } else if (campo.tipo === "casilla") {
+    el = document.createElement("input"); el.type = "checkbox";
+    el.checked = campo.valor;
+    el.onchange = () => { campo.valor = el.checked; campo.cambiado = true; for (const o of campo.controles) o.checked = el.checked; };
+  } else if (campo.tipo === "opcion") {
+    el = document.createElement("input"); el.type = "radio"; el.name = nombreGrupo; el.value = a.buttonValue;
+    el.checked = campo.valor === a.buttonValue;
+    el.onchange = () => { if (el.checked) { campo.valor = a.buttonValue; campo.cambiado = true; } };
+    // Tocar la opción ya marcada la desmarca (en papel también se puede dejar en blanco)
+    el.onclick = () => { if (el._antes) { el.checked = false; campo.valor = ""; campo.cambiado = true; } };
+    el.onpointerdown = el.onkeydown = () => { el._antes = el.checked; };
+  } else {
+    el = document.createElement("select");
+    if (a.multiSelect) el.multiple = true; else el.append(new Option("", ""));
+    for (const o of a.options || []) el.append(new Option(o.displayValue, o.exportValue));
+    const actual = [].concat(campo.valor);
+    for (const o of el.options) o.selected = actual.includes(o.value);
+    el.onchange = () => {
+      campo.valor = el.multiple ? [...el.selectedOptions].map((o) => o.value) : el.value; campo.cambiado = true;
+      for (const o of campo.controles) if (o !== el) for (const x of o.options) x.selected = [].concat(campo.valor).includes(x.value);
+    };
+  }
+  el.className = "campo-pdf";
+  el.title = a.alternativeText || a.fieldName;
+  if (a.readOnly) el.disabled = true;
+  campo.controles.push(el);
+  return el;
+}
+zonaDeArchivos($("zonaFo"), $("archivoFo"), async (fs) => {
+  const f = fs.find(esPdf);
+  if (!f) { $("infoFo").textContent = "Ese archivo no es un PDF."; return; }
+  $("infoFo").textContent = "Abriendo…";
+  $("opcionesFo").hidden = true;
+  try {
+    const bytes = new Uint8Array(await f.arrayBuffer()), doc = await abrirPdf(f), form = doc.getForm();
+    const conXfa = form.hasXFA(), nombres = form.getFields().map((c) => c.getName());
+    if (!nombres.length) throw new Error(`«${f.name}» no tiene campos para llenar. Para escribir encima de cualquier PDF usa «Editar PDF».`);
+    const vista = await (await pdfJs()).getDocument({ data: bytes.slice() }).promise;
+    if (paraForm) paraForm.vista.destroy();
+    paraForm = { f, bytes, vista, campos: new Map() };
+    const caja = $("hojasFo");
+    caja.textContent = "";
+    let puestos = 0;
+    for (let n = 1; n <= vista.numPages; n++) {
+      const pagina = await vista.getPage(n), v = pagina.getViewport({ scale: 1 });
+      const anotaciones = (await pagina.getAnnotations()).filter((a) => a.subtype === "Widget" && a.fieldName && !a.pushButton && a.fieldType !== "Sig" && !a.hidden);
+      if (!anotaciones.length) continue;
+      const hoja = document.createElement("div"), lienzo = document.createElement("canvas");
+      hoja.className = "hoja-form";
+      hoja.style.aspectRatio = `${v.width} / ${v.height}`;
+      hoja.append(lienzo);
+      const etiqueta = document.createElement("p");
+      etiqueta.className = "aviso"; etiqueta.textContent = `Página ${n}`;
+      caja.append(etiqueta, hoja);
+      for (const a of anotaciones) {
+        const tipo = a.fieldType === "Tx" ? "texto" : a.fieldType === "Btn" ? (a.checkBox ? "casilla" : a.radioButton ? "opcion" : null) : a.fieldType === "Ch" ? "lista" : null;
+        if (!tipo) continue;
+        let campo = paraForm.campos.get(a.fieldName);
+        if (!campo) {
+          const fv = a.fieldValue;
+          campo = { tipo, cambiado: false, controles: [], opciones: a.options,
+            valor: tipo === "texto" ? (typeof fv === "string" ? fv : "") : tipo === "casilla" ? !!fv && fv !== "Off" && (fv === a.exportValue || !a.exportValue)
+              : tipo === "opcion" ? (fv && fv !== "Off" ? fv : "") : (a.multiSelect ? [].concat(fv || []) : [].concat(fv || [""])[0]) };
+          paraForm.campos.set(a.fieldName, campo);
+        }
+        const [x1, y1, x2, y2] = v.convertToViewportRectangle(a.rect);
+        const el = controlDeCampo(a, campo, "fo-" + [...paraForm.campos.keys()].indexOf(a.fieldName));
+        const alto = Math.abs(y2 - y1), da = a.defaultAppearanceData && a.defaultAppearanceData.fontSize;
+        const letra = a.multiLine ? Math.min(da || 10, 14) : Math.min(da || 12, alto * 0.75);
+        Object.assign(el.style, { left: Math.min(x1, x2) / v.width * 100 + "%", top: Math.min(y1, y2) / v.height * 100 + "%",
+          width: Math.abs(x2 - x1) / v.width * 100 + "%", height: alto / v.height * 100 + "%", fontSize: `calc(var(--pt) * ${letra})` });
+        if (a.comb && a.maxLen) el.style.letterSpacing = `calc(var(--pt) * ${Math.max(0, Math.abs(x2 - x1) / a.maxLen - letra * 0.6)})`;
+        if (a.textAlignment === 1) el.style.textAlign = "center"; else if (a.textAlignment === 2) el.style.textAlign = "right";
+        hoja.append(el);
+        puestos++;
+      }
+      hoja._pintar = async () => {
+        const e = Math.min(1600, (hoja.clientWidth || 700) * Math.min(devicePixelRatio || 1, 2)) / v.width, vv = pagina.getViewport({ scale: e });
+        lienzo.width = Math.round(vv.width); lienzo.height = Math.round(vv.height);
+        // annotationMode 0: sin los campos dibujados por PDF.js (se ven los nuestros encima)
+        await pagina.render({ canvasContext: lienzo.getContext("2d"), viewport: vv, annotationMode: 0 }).promise;
+      };
+      hoja._ancho = v.width;
+      alVerseFo.observe(hoja);
+      tamFo.observe(hoja);
+    }
+    if (!puestos) {
+      paraForm = null;
+      throw new Error(conXfa ? `«${f.name}» es un formulario XFA (de los que solo llena Adobe Reader) y aquí no se puede llenar.` : `«${f.name}» no tiene campos que se puedan llenar.`);
+    }
+    $("infoFo").textContent = `${f.name} · ${paraForm.campos.size === 1 ? "1 campo" : paraForm.campos.size + " campos"}`;
+    $("opcionesFo").hidden = false;
+    aviso("avisoFo", "");
+  } catch (e) {
+    $("infoFo").textContent = String(e && e.message || e);
+  }
+});
+$("limpiarFo").onclick = () => {
+  if (!paraForm) return;
+  for (const c of paraForm.campos.values()) {
+    if (c.controles[0]?.disabled) continue;
+    c.valor = c.tipo === "casilla" ? false : c.tipo === "lista" && c.controles[0]?.multiple ? [] : "";
+    c.cambiado = true;
+    for (const el of c.controles) {
+      if (el.type === "checkbox" || el.type === "radio") el.checked = false;
+      else if (el.tagName === "SELECT") for (const o of el.options) o.selected = false;
+      else el.value = "";
+    }
+  }
+  aviso("avisoFo", "Se borró lo escrito. Guarda para tener el formulario en blanco.");
+};
+$("botonFo").onclick = async () => {
+  const a = paraForm;
+  if (!a) return;
+  $("botonFo").disabled = true;
+  try {
+    aviso("avisoFo", "Guardando…");
+    const L = await pdfLib(), doc = await L.PDFDocument.load(a.bytes), form = doc.getForm();
+    if (form.hasXFA()) form.deleteXFA();       // si no, Acrobat mostraría los datos viejos del XFA
+    const helv = await doc.embedFont(L.StandardFonts.Helvetica);
+    // Listas: pdf-lib conoce las opciones por el texto que se ve; botones de opción con /Opt, por número
+    const opcionDe = (campo, c, v) => {
+      const validas = campo.getOptions();
+      if (validas.includes(v)) return v;
+      const o = (c.opciones || []).find((o) => o.exportValue === v);
+      if (o && validas.includes(o.displayValue)) return o.displayValue;
+      return /^\d+$/.test(v) && validas[Number(v)] !== undefined ? validas[Number(v)] : v;
+    };
+    let cambios = 0;
+    for (const [nombre, c] of a.campos) {
+      if (!c.cambiado) continue;
+      let campo;
+      try { campo = form.getField(nombre); } catch { continue; }
+      try {
+        if (campo instanceof L.PDFTextField) {
+          const max = campo.getMaxLength();
+          medirTexto(helv, c.valor.replace(/\n/g, " "), 10);
+          // Tamaño «automático» en varias líneas: pdf-lib agrandaría la letra hasta llenar el recuadro
+          if (campo.isMultiline() && /(^|\s)0(\.0*)?\s+Tf/.test(campo.acroField.getDefaultAppearance() || "")) campo.setFontSize(10);
+          campo.setText(max !== undefined ? c.valor.slice(0, max) : c.valor);
+        } else if (campo instanceof L.PDFCheckBox) c.valor ? campo.check() : campo.uncheck();
+        else if (campo instanceof L.PDFRadioGroup) c.valor ? campo.select(opcionDe(campo, c, c.valor)) : campo.clear();
+        else if (campo instanceof L.PDFDropdown) c.valor ? campo.select(opcionDe(campo, c, c.valor)) : campo.clear();
+        else if (campo instanceof L.PDFOptionList) c.valor.length ? campo.select(c.valor.map((v) => opcionDe(campo, c, v))) : campo.clear();
+        else continue;
+        cambios++;
+      } catch (e) {
+        if (/símbolos/.test(String(e && e.message))) throw new Error(`En «${nombre}» hay símbolos que no se pueden escribir (por ejemplo emojis). Usa letras, números y signos comunes.`);
+        console.warn("Campo que no se pudo llenar", nombre, e);
+      }
+    }
+    form.updateFieldAppearances(helv);
+    const fijo = $("aplanarFo").checked;
+    if (fijo) {
+      form.flatten();
+      // pdf-lib borra los campos pero a veces deja su referencia en la lista de la hoja (Annots): el archivo quedaría con huecos
+      for (const p of doc.getPages()) {
+        const an = p.node.lookup(L.PDFName.of("Annots"));
+        if (an instanceof L.PDFArray) for (let k = an.size() - 1; k >= 0; k--) { const r = an.get(k); if (r instanceof L.PDFRef && !doc.context.lookup(r)) an.remove(k); }
+      }
+    }
+    const bytes = await doc.save();
+    filaDescarga($("salidaFo"), bytes, sinExt(a.f.name) + (fijo ? " (lleno, fijo).pdf" : " (lleno).pdf"), cambios === 1 ? "1 campo llenado" : `${cambios} campos llenados`);
+    aviso("avisoFo", "Listo. Ábrelo para revisarlo antes de enviarlo.");
+    $("salidaFo").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } catch (e) {
+    aviso("avisoFo", String(e && e.message || e), true);
+  } finally {
+    $("botonFo").disabled = false;
+  }
+};
+
+// ---------------------------------------------------------------- 22. sacar las imágenes
+// Se recorren los recursos de cada página (y de los dibujos que llevan dentro) buscando objetos
+// imagen. Los JPG se sacan tal cual (sus bytes, sin perder nada); los demás se decodifican aquí
+// —gris, RGB, CMYK, con paleta, de 1 a 16 bits, con o sin transparencia— y se guardan en PNG.
+// Los de fax (CCITT) y JBIG2, típicos de escaneos en blanco y negro, no se saben leer aquí.
+let paraSacar = null;           // { f, total }
+zonaDeArchivos($("zonaSI"), $("archivoSI"), async (fs) => {
+  const f = fs.find(esPdf);
+  if (!f) { $("infoSI").textContent = "Ese archivo no es un PDF."; return; }
+  $("infoSI").textContent = "Abriendo…";
+  try {
+    const doc = await abrirPdf(f);
+    paraSacar = { f, total: doc.getPageCount() };
+    $("infoSI").textContent = `${f.name} · ${paginasTxt(paraSacar.total)}`;
+    $("opcionesSI").hidden = false;
+    aviso("avisoSI", "");
+  } catch (e) {
+    paraSacar = null;
+    $("opcionesSI").hidden = true;
+    $("infoSI").textContent = String(e && e.message || e);
+  }
+});
+// Espacio de color → { n (componentes), aRgb(comps 0–1, salida, j) } o { paleta } o null si no se sabe
+function espacioDe(L, cs, prof = 0) {
+  const { PDFName, PDFArray } = L, nom = (s) => PDFName.of(s);
+  const gris = { n: 1, aRgb: (c, o, j) => { o[j] = o[j + 1] = o[j + 2] = c[0] * 255; } };
+  const rgb = { n: 3, aRgb: (c, o, j) => { o[j] = c[0] * 255; o[j + 1] = c[1] * 255; o[j + 2] = c[2] * 255; } };
+  const cmyk = { n: 4, aRgb: (c, o, j) => { const k = 1 - c[3]; o[j] = 255 * (1 - c[0]) * k; o[j + 1] = 255 * (1 - c[1]) * k; o[j + 2] = 255 * (1 - c[2]) * k; } };
+  if (!cs || prof > 3) return null;
+  if (cs === nom("DeviceGray") || cs === nom("CalGray") || cs === nom("G")) return gris;
+  if (cs === nom("DeviceRGB") || cs === nom("CalRGB") || cs === nom("RGB")) return rgb;
+  if (cs === nom("DeviceCMYK") || cs === nom("CMYK")) return cmyk;
+  if (!(cs instanceof PDFArray)) return null;
+  const tipo = cs.lookup(0);
+  if (tipo === nom("CalGray")) return gris;
+  if (tipo === nom("CalRGB")) return rgb;
+  if (tipo === nom("ICCBased")) { const k = cs.lookup(1)?.dict?.lookup(nom("N"))?.asNumber(); return k === 1 ? gris : k === 3 ? rgb : k === 4 ? cmyk : null; }
+  if (tipo === nom("Separation")) return { n: 1, aRgb: (c, o, j) => { o[j] = o[j + 1] = o[j + 2] = 255 * (1 - c[0]); } };     // una tinta: 1 = toda la tinta
+  if (tipo === nom("Indexed") || tipo === nom("I")) {
+    const baseCs = espacioDe(L, cs.lookup(1), prof + 1), tope = cs.lookup(2)?.asNumber?.(), t = cs.lookup(3);
+    if (!baseCs || baseCs.paleta || !(tope >= 0)) return null;
+    let tabla = t && typeof t.asBytes === "function" ? t.asBytes() : null;
+    if (!tabla && t?.contents) tabla = t;           // en un flujo: se descomprime después
+    return tabla ? { paleta: { base: baseCs, tope, tabla } } : null;
+  }
+  return null;
+}
+async function contenidoDe(L, obj) {     // los bytes ya sin el filtro (FlateDecode o ninguno), o null si es otro filtro
+  const { PDFName, PDFArray } = L, nom = (s) => PDFName.of(s), d = obj.dict;
+  let filtro = d.lookup(nom("Filter")), parms = d.lookup(nom("DecodeParms"));
+  if (filtro instanceof PDFArray) { if (filtro.size() > 1) return null; filtro = filtro.size() ? filtro.lookup(0) : undefined; }
+  if (parms instanceof PDFArray) parms = parms.size() ? parms.lookup(0) : undefined;
+  if (!filtro) return obj.contents;
+  if (filtro !== nom("FlateDecode") && filtro !== nom("Fl")) return null;
+  let b = await porTubo(obj.contents, new DecompressionStream("deflate")).catch(() => null);
+  if (!b) return null;
+  const pp = (k, def) => { const x = parms?.lookup?.(nom(k)); return x ? x.asNumber() : def; };
+  const pred = pp("Predictor", 1);
+  if (pred > 1) {
+    if (pp("BitsPerComponent", 8) !== 8) return null;
+    b = sinPredictor(b, pred, pp("Colors", 1), pp("Columns", 1));
+  }
+  return b;
+}
+// Lee muestras de «bits» bits, renglón por renglón (cada renglón empieza en un byte nuevo) → valores 0–1
+function muestras(b, w, h, n, bits, decode) {
+  const fila = Math.ceil(w * n * bits / 8), out = new Float32Array(w * h * n), max = (1 << Math.min(bits, 16)) - 1;
+  const lo = [], an = [];
+  for (let c = 0; c < n; c++) { const a = decode ? decode[c * 2] : 0, z = decode ? decode[c * 2 + 1] : 1; lo.push(a); an.push(z - a); }
+  for (let y = 0, q = 0; y < h; y++) {
+    const s = y * fila;
+    for (let i = 0; i < w * n; i++, q++) {
+      let v;
+      if (bits === 8) v = b[s + i];
+      else if (bits === 16) v = (b[s + 2 * i] << 8) | b[s + 2 * i + 1];
+      else { const bit = i * bits; v = (b[s + (bit >> 3)] >> (8 - bits - (bit & 7))) & max; }
+      const c = i % n;
+      out[q] = lo[c] + an[c] * (v || 0) / max;
+    }
+  }
+  return out;
+}
+// Objeto imagen → RGBA (Uint8ClampedArray) de w × h, o null si no se sabe leer
+async function pixelesDe(L, obj, tamano) {
+  const { PDFName, PDFArray } = L, nom = (s) => PDFName.of(s), d = obj.dict, ver = (k) => d.lookup(nom(k));
+  const num = (k) => { const x = ver(k); return x && typeof x.asNumber === "function" ? x.asNumber() : NaN; };
+  const w = num("Width"), h = num("Height");
+  if (!(w > 0 && h > 0) || w * h > 30e6) return null;
+  let filtro = ver("Filter");
+  if (filtro instanceof PDFArray) filtro = filtro.size() === 1 ? filtro.lookup(0) : null;
+  const px = new Uint8ClampedArray(w * h * 4);
+  const decArr = ver("Decode") instanceof PDFArray ? ver("Decode").asArray().map((x) => x.asNumber()) : null;
+  if (filtro === nom("DCTDecode") || filtro === nom("DCT")) {
+    const mapa = await createImageBitmap(new Blob([sinExif(obj.contents)], { type: "image/jpeg" })).catch(() => null);
+    if (!mapa) return null;
+    const c = lienzoNuevo(w, h), ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(mapa, 0, 0, w, h); mapa.close();
+    px.set(ctx.getImageData(0, 0, w, h).data);
+  } else {
+    const b = await contenidoDe(L, obj);
+    if (!b) return null;
+    if (String(ver("ImageMask")) === "true") {          // máscara de 1 bit: lo pintado en negro, lo demás transparente
+      const m = muestras(b, w, h, 1, 1, decArr);
+      for (let i = 0; i < w * h; i++) px[i * 4 + 3] = m[i] < 0.5 ? 255 : 0;
+      return { w, h, px };
+    }
+    const bits = num("BitsPerComponent"), cs = espacioDe(L, ver("ColorSpace"));
+    if (!cs || ![1, 2, 4, 8, 16].includes(bits)) return null;
+    if (cs.paleta) {
+      const { base: bc, tope, tabla } = cs.paleta;
+      const t = tabla.contents ? await contenidoDe(L, tabla) : tabla;
+      if (!t) return null;
+      const m = muestras(b, w, h, 1, bits, null), max = (1 << bits) - 1, comps = new Float32Array(bc.n), rgbT = new Uint8ClampedArray((tope + 1) * 4);
+      for (let k = 0; k <= tope; k++) { for (let c = 0; c < bc.n; c++) comps[c] = (t[k * bc.n + c] || 0) / 255; bc.aRgb(comps, rgbT, k * 4); }
+      for (let i = 0; i < w * h; i++) { const k = Math.min(tope, Math.round(m[i] * max)); px[i * 4] = rgbT[k * 4]; px[i * 4 + 1] = rgbT[k * 4 + 1]; px[i * 4 + 2] = rgbT[k * 4 + 2]; px[i * 4 + 3] = 255; }
+    } else {
+      const m = muestras(b, w, h, cs.n, bits, decArr && decArr.length >= cs.n * 2 ? decArr : null), comps = new Float32Array(cs.n);
+      for (let i = 0; i < w * h; i++) { for (let c = 0; c < cs.n; c++) comps[c] = m[i * cs.n + c]; cs.aRgb(comps, px, i * 4); px[i * 4 + 3] = 255; }
+    }
+  }
+  if (tamano) return { w, h, px };
+  // Transparencia: SMask (gris) o Mask (máscara de 1 bit)
+  const sm = ver("SMask"), mk = ver("Mask");
+  const mascara = sm?.dict ? sm : mk?.dict ? mk : null;
+  if (mascara) {
+    const m = await pixelesDe(L, mascara, true);
+    if (m) {
+      let alfa = m.px;
+      if (m.w !== w || m.h !== h) {      // otro tamaño: se estira
+        const c = lienzoNuevo(m.w, m.h); c.getContext("2d").putImageData(new ImageData(m.px, m.w, m.h), 0, 0);
+        const c2 = lienzoNuevo(w, h), ctx = c2.getContext("2d", { willReadFrequently: true }); ctx.drawImage(c, 0, 0, w, h);
+        alfa = ctx.getImageData(0, 0, w, h).data;
+      }
+      const esMascara = mascara === mk;          // de 1 bit: ya viene como transparencia (canal 3)
+      for (let i = 0; i < w * h; i++) px[i * 4 + 3] = esMascara ? alfa[i * 4 + 3] : alfa[i * 4];
+    }
+  }
+  return { w, h, px };
+}
+$("botonSI").onclick = async () => {
+  const a = paraSacar;
+  if (!a) return;
+  $("botonSI").disabled = true;
+  try {
+    const cuales = [...new Set(leerRangos($("paginasSI").value, a.total).flat())].sort((x, y) => x - y);
+    aviso("avisoSI", "Buscando las imágenes…");
+    await pintar();
+    const L = await pdfLib(), { PDFName, PDFDict, PDFRawStream } = L, nom = (s) => PDFName.of(s);
+    const doc = await abrirPdf(a.f), chicas = $("chicasSI").checked;
+    const vistas = new Set(), lista = [];          // { obj, pagina }
+    const recorrer = (recursos, pagina, prof) => {
+      const xo = recursos instanceof PDFDict ? recursos.lookup(nom("XObject")) : null;
+      if (!(xo instanceof PDFDict)) return;
+      for (const [, ref] of xo.entries()) {
+        const obj = doc.context.lookup(ref);
+        if (!(obj instanceof PDFRawStream) || vistas.has(obj)) continue;
+        vistas.add(obj);
+        const sub = obj.dict.get(nom("Subtype"));
+        if (sub === nom("Image")) lista.push({ obj, pagina });
+        else if (sub === nom("Form") && prof < 10) recorrer(obj.dict.lookup(nom("Resources")), pagina, prof + 1);
+      }
+    };
+    for (const i of cuales) recorrer(doc.getPage(i).node.Resources(), i, 0);
+    const nombre = sinExt(a.f.name), cifras = String(a.total).length, hechas = [];
+    let saltadas = 0, noSe = 0, porPagina = 0, anterior = -1;
+    for (const [k, x] of lista.entries()) {
+      if (k % 10 === 0) { aviso("avisoSI", `Imagen ${k + 1} de ${lista.length}…`); await pintar(); }
+      const d = x.obj.dict, num = (s) => d.lookup(nom(s))?.asNumber?.() ?? 0, w = num("Width"), h = num("Height");
+      if (chicas && (Math.min(w, h) < 32 || w * h < 6000)) { saltadas++; continue; }
+      porPagina = x.pagina === anterior ? porPagina + 1 : 1; anterior = x.pagina;
+      const base1 = `${nombre} - pág ${String(x.pagina + 1).padStart(cifras, "0")} - ${porPagina}`;
+      let filtro = d.lookup(nom("Filter"));
+      if (filtro instanceof L.PDFArray) filtro = filtro.size() === 1 ? filtro.lookup(0) : null;
+      const sinTransparencia = !d.lookup(nom("SMask")) && !(d.lookup(nom("Mask"))?.dict);
+      try {
+        if ((filtro === nom("DCTDecode") || filtro === nom("DCT")) && sinTransparencia) {
+          hechas.push({ nombre: base1 + ".jpg", bytes: x.obj.contents, tipo: "image/jpeg", px: pxTxt(w, h) });
+          continue;
+        }
+        if (filtro === nom("JPXDecode") && sinTransparencia) {
+          hechas.push({ nombre: base1 + ".jp2", bytes: x.obj.contents, tipo: "image/jp2", px: pxTxt(w, h) });
+          continue;
+        }
+        const r = await pixelesDe(L, x.obj);
+        if (!r) { noSe++; porPagina--; continue; }
+        const c = lienzoNuevo(r.w, r.h);
+        c.getContext("2d").putImageData(new ImageData(r.px, r.w, r.h), 0, 0);
+        hechas.push({ nombre: base1 + ".png", bytes: await guardarImagen(c, "png"), tipo: "image/png", px: pxTxt(r.w, r.h) });
+        c.width = 0;
+      } catch (e) { console.warn("Imagen que no se pudo sacar", e); noSe++; porPagina--; }
+    }
+    const notas = [];
+    if (saltadas) notas.push(`${saltadas === 1 ? "Se saltó 1 imagen muy chica" : `Se saltaron ${saltadas} imágenes muy chicas`}.`);
+    if (noSe) notas.push(`${noSe === 1 ? "1 imagen está" : noSe + " imágenes están"} en un formato que aquí no se sabe leer (típico de escaneos en blanco y negro); para esas usa «PDF a imágenes».`);
+    if (!hechas.length) throw new Error((lista.length ? "No se pudo sacar ninguna imagen. " : "Ese PDF (o esas páginas) no trae imágenes. ") + notas.join(" "));
+    if (hechas.length <= 12) for (const h of [...hechas].reverse()) filaDescarga($("salidaSI"), h.bytes, h.nombre, h.px, h.tipo);
+    if (hechas.length > 1) filaDescarga($("salidaSI"), zipSimple(hechas), `${nombre} (imágenes sacadas).zip`, `${hechas.length} imágenes`, "application/zip");
+    aviso("avisoSI", `Listo: ${hechas.length === 1 ? "1 imagen" : hechas.length + " imágenes"}${hechas.length > 12 ? ", juntas en un .zip" : ""}. ` + notas.join(" "));
+  } catch (e) {
+    aviso("avisoSI", String(e && e.message || e), true);
+  } finally {
+    $("botonSI").disabled = false;
+  }
+};
