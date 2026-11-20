@@ -15,7 +15,7 @@ import json
 import pathlib
 import datetime
 
-NOMBRE = "Convertidor"
+NOMBRE = "Navaja PDF"
 SITIO = "https://convertidor.abner8963.workers.dev/"   # dirección principal (la que Google debe mostrar)
 LEMA = "Herramientas de PDF e imágenes gratis, sin subir tus archivos"
 

@@ -1,6 +1,6 @@
 {
-  "name": "Convertidor",
-  "short_name": "Convertidor",
+  "name": "Navaja PDF",
+  "short_name": "Navaja PDF",
   "description": "Herramientas de PDF e imágenes dentro del navegador, sin subir tus archivos: Office a PDF, unir, dividir, comprimir, firmar, editar, recortar y más.",
   "start_url": "./",
   "scope": "./",

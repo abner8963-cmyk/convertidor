@@ -1,4 +1,4 @@
-# Convertidor a PDF
+# Navaja PDF
 
 Convierte Word, Excel y PowerPoint (y ODT, ODS, ODP, RTF, TXT, CSV) a PDF **dentro del navegador**:
 los archivos nunca salen del dispositivo.
