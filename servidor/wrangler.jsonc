@@ -21,6 +21,6 @@
   ],
   "vars": {
     "ORIGENES": "https://convertidor.abner8963.workers.dev,https://abner8963-cmyk.github.io,http://localhost:8799,http://127.0.0.1:8799",
-    "TURNSTILE_SITEKEY": ""
+    "TURNSTILE_SITEKEY": "0x4AAAAAAGMxvS8VdXvLsGS1"
   }
 }
