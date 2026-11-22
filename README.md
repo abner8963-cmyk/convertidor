@@ -102,7 +102,7 @@ hoja vieja (marcadores) pasan a la nueva.
 
 ## Fotos HEIC
 
-Cualquier zona de archivos pasa las fotos HEIC/HEIF a JPG (o PNG si tienen transparencia) al
+Las herramientas con salida JPG, PNG o WebP pueden pasar las fotos HEIC/HEIF a JPG (o PNG si tienen transparencia) al
 recibirlas, con libheif 1.23 (`lib/libheif.js` + `lib/libheif.wasm`, paquete libheif-js 1.23.5,
 LGPL-3.0; se baja la primera vez que se usa). Hay que pasarle el `.wasm` ya bajado (`wasmBinary`):
 este build no sabe bajarlo solo.
@@ -116,8 +116,30 @@ varias veces, que se ve mejor que de un solo golpe. Al comprimir, los PNG pasan 
 colores (como TinyPNG): si la imagen ya tiene 256 colores o menos se guardan exactos; si no, se
 eligen por corte en la mediana con difuminado Floyd-Steinberg, conservando la transparencia, y el
 PNG se escribe a mano (zlib con `CompressionStream`). Volver a guardar una imagen le quita los datos
-de la cámara (fecha, ubicación). Las fotos HEIC de iPhone solo se abren donde el navegador las
-entiende (Safari).
+de la cámara (fecha, ubicación). Las fotos HEIC se abren con libheif.
+
+## Comparar PDF y convertir a Markdown, PowerPoint o Excel
+
+- Comparar alinea páginas por su texto y su imagen. Marca palabras agregadas y quitadas y
+  superpone las páginas para distinguir cambios de imagen. El reporte PDF incluye ambas vistas.
+- Markdown comparte la reconstrucción de párrafos, títulos y fuentes de PDF a Word. Las imágenes
+  son opcionales y se entregan con el .md en un ZIP.
+- PowerPoint usa una imagen a 160 ppp por página, con un límite de resolución para páginas muy
+  grandes. Puede reconstruir texto horizontal como cuadros editables cuando reconoce las fuentes
+  y puede retirar el texto del fondo. El tamaño de la presentación se toma de la primera página
+  y las demás se ajustan proporcionalmente.
+- Excel y Markdown detectan tablas simples por los huecos del texto y por las líneas dibujadas.
+  Excel guarda importes y porcentajes como números. Los escaneos deben pasar por OCR para extraer
+  texto. Las tablas con celdas combinadas y los diseños de varias columnas pueden requerir ajustes.
+
+## Marca de agua en imágenes
+
+Pone un texto o logo en JPG, PNG, WebP o HEIC, con vista previa y salida del mismo formato.
+Para guardar HEIC se usa un codificador WebAssembly de libheif 1.23.6
+(LGPL-3.0-or-later) y Kvazaar 2.3.1 (BSD-3-Clause), su único códec HEVC.
+También incluye el runtime de Emscripten, musl y componentes de LLVM.
+Consulta las [licencias](lib/heic-enc.LICENSE) y la [receta de compilación](lib/heic-enc.BUILD.md).
+El navegador carga el codificador al guardar HEIC por primera vez y lo guarda para uso sin conexión.
 
 ## Seguir con otra herramienta
 

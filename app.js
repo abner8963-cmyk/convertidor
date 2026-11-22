@@ -362,12 +362,10 @@ async function iniciarOffice() {
 }
 
 // ---------------------------------------------------------------- 5. menú de herramientas
-const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", "aimagenes", "comprimir", "numeros", "marca", "proteger", "desbloquear", "ocr", "firmar", "editar",
-  "comprimir-imagen", "cambiar-tamano", "recortar", "convertir-imagen", "girar-imagen", "escanear",
-  "recortarpdf", "reparar", "formulario", "sacarimagenes", "pdfaword"];
 // Cada herramienta tiene su propia dirección (…/unir-pdf/); las páginas las genera
 // generar.py y todas traen la app completa, así que cambiar de herramienta no recarga.
 const RUTAS = JSON.parse($("rutas").textContent);          // cada ruta trae vista, título de página y nombre de herramienta
+const VISTAS = [...new Set(Object.values(RUTAS).map(({ v }) => v))];
 const PRINCIPAL = {};                                       // vista → su dirección principal
 for (const [ruta, r] of Object.entries(RUTAS)) if (!(r.v in PRINCIPAL)) PRINCIPAL[r.v] = ruta;
 function rutaDe(href) {
@@ -427,7 +425,7 @@ function libHeif() {
     return window.libheif({ wasmBinary });
   })().catch(() => { _heif = null; throw new Error("No se pudo cargar el lector de fotos HEIC. Revisa tu internet."); });
 }
-async function heicAJpg(f) {
+async function lienzoHeic(f) {
   const m = await libHeif(), dec = new m.HeifDecoder();
   let imgs = [];
   try {
@@ -439,19 +437,22 @@ async function heicAJpg(f) {
     const c = document.createElement("canvas");
     c.width = w; c.height = h;
     c.getContext("2d").putImageData(datos, 0, 0);
-    // Con transparencia, PNG (el JPG la volvería negra); si no, JPG
-    let alfa = false;
-    for (let i = 3; i < datos.data.length; i += 4) if (datos.data[i] < 255) { alfa = true; break; }
-    const tipo = alfa ? "image/png" : "image/jpeg";
-    const blob = await new Promise((ok) => c.toBlob(ok, tipo, 0.95));
-    c.width = 0;
-    return new File([blob], f.name.replace(/\.(heic|heif|hif)$/i, "") + (alfa ? ".png" : ".jpg"), { type: tipo, lastModified: f.lastModified });
+    return { c, datos };
   } catch (e) {
     if (e instanceof Error && /HEIC/.test(e.message)) throw e;
     throw new Error(`«${f.name}» parece HEIC pero no se pudo leer.`);
   } finally {
     for (const i of imgs) try { i.free(); } catch { /* ya libre */ }
   }
+}
+async function heicAJpg(f) {
+  const { c, datos: { data } } = await lienzoHeic(f);
+  let alfa = false;
+  for (let i = 3; i < data.length; i += 4) if (data[i] < 255) { alfa = true; break; }
+  const tipo = alfa ? "image/png" : "image/jpeg";
+  const blob = await new Promise((ok) => c.toBlob(ok, tipo, 0.95));
+  c.width = 0;
+  return new File([blob], f.name.replace(/\.(heic|heif|hif)$/i, "") + (alfa ? ".png" : ".jpg"), { type: tipo, lastModified: f.lastModified });
 }
 // Devuelve la lista con las HEIC ya en JPG (las que fallen se dejan: la herramienta dirá que no las abre)
 async function sinHeic(fs, avance = () => {}) {
@@ -509,8 +510,8 @@ async function abrirPdf(f) {
   }
 }
 const RUTAS_PDF = ["unir", "dividir", "organizar", "girar-pdf", "comprimir", "numeros", "marca",
-  "proteger", "desbloquear", "firmar", "editar", "ocr", "recortarpdf", "pdfaword", "aimagenes"];
-const RUTAS_IMG = ["imagenes", "comprimir-imagen", "cambiar-tamano", "convertir-imagen"];
+  "proteger", "desbloquear", "firmar", "editar", "ocr", "recortarpdf", "pdfaword", "aimagenes", "compararpdf", "pdfamarkdown", "pdfapowerpoint", "pdfaexcel"];
+const RUTAS_IMG = ["imagenes", "comprimir-imagen", "cambiar-tamano", "convertir-imagen", "marcaimagen"];
 const MIME_OFFICE = /^application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)$/i;
 
 function rutasParaArchivo(f, compartido = false) {
@@ -530,7 +531,7 @@ function opcionesDeDestino(herramientas, cantidad) {
     const { v: vista, n } = RUTAS[ruta];
     const entrada = entradasDeArchivos.get(vista);
     return { ruta, nombre: n, entrada };
-  }).filter(({ entrada }) => entrada && (cantidad === 1 || entrada.multiple));
+  }).filter(({ ruta, entrada }) => entrada && (cantidad === 1 || entrada.multiple) && (ruta !== "comparar-pdf" || cantidad <= 2));
 }
 
 async function abrirCon(ruta, archivos) {
@@ -4371,7 +4372,7 @@ function estiloDeFuente(fuente, estilos) {
 }
 const mediana = (xs) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
 // Una página → { bloques: [ párrafo | imagen ], sinTexto }  (medidas en puntos, desde arriba a la izquierda)
-async function leerPaginaWord(pdfjs, pagina, conImagenes) {
+async function leerPaginaWord(pdfjs, pagina, conImagenes, omitirRenglon = () => false) {
   const v = pagina.getViewport({ scale: 1 }), W = v.width, H = v.height;
   const ops = await pagina.getOperatorList();                 // de paso, carga las fuentes (nombre, negrita, cursiva)
   const tc = await pagina.getTextContent();
@@ -4402,10 +4403,11 @@ async function leerPaginaWord(pdfjs, pagina, conImagenes) {
     r.size = Math.max(r.size, size);
     if (it.hasEOL) r.fin = true;
   }
-  const llenos = renglones.filter((x) => x.trozos.some((t) => t.t.trim()));
+  const conTexto = renglones.filter((x) => x.trozos.some((t) => t.t.trim()));
+  const llenos = conTexto.filter((x) => !omitirRenglon(x));
   // Tamaño de letra del cuerpo (el más común, pesado por letras) y espacio normal entre renglones
   const porTam = new Map();
-  for (const x of llenos) for (const t of x.trozos) porTam.set(t.size, (porTam.get(t.size) || 0) + t.t.length);
+  for (const x of conTexto) for (const t of x.trozos) porTam.set(t.size, (porTam.get(t.size) || 0) + t.t.length);
   const cuerpo = [...porTam].sort((a, b) => b[1] - a[1])[0]?.[0] || 11;
   const saltos = [];
   for (let k = 1; k < llenos.length; k++) { const d = llenos[k].base - llenos[k - 1].base; if (d > 0 && Math.abs(llenos[k].size - llenos[k - 1].size) < 1) saltos.push(d / llenos[k].size); }
@@ -4604,4 +4606,922 @@ $("botonPW").onclick = async () => {
   }
 };
 
+
+// ---------------------------------------------------------------- Comparar dos PDF
+async function conPdfLocal(f, usar) {
+  const pdfjs = await pdfJs();
+  const tarea = pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) });
+  try { return await usar(await tarea.promise, pdfjs); }
+  finally { await tarea.destroy(); }
+}
+
+function diferenciasPorPalabra(antes, despues) {
+  const tokens = (s) => s.match(/[\p{L}\p{M}\p{N}]+|[^\s\p{L}\p{M}\p{N}]|\s+/gu) || [];
+  const a = tokens(antes), b = tokens(despues), trozos = [];
+  const agregar = (tipo, texto) => {
+    if (!texto) return;
+    const ultimo = trozos.at(-1);
+    if (ultimo?.tipo === tipo) ultimo.texto += texto;
+    else trozos.push({ tipo, texto });
+  };
+  let ini = 0, na = a.length, nb = b.length;
+  while (ini < na && ini < nb && a[ini] === b[ini]) ini++;
+  while (na > ini && nb > ini && a[na - 1] === b[nb - 1]) { na--; nb--; }
+  agregar("igual", a.slice(0, ini).join(""));
+  const ancho = nb - ini + 1, alto = na - ini + 1;
+  if (ancho * alto > 4e6) {
+    agregar("del", a.slice(ini, na).join(""));
+    agregar("ins", b.slice(ini, nb).join(""));
+  } else {
+    const lcs = new Uint32Array(ancho * alto);
+    for (let i = na - 1; i >= ini; i--) for (let j = nb - 1; j >= ini; j--) {
+      const k = (i - ini) * ancho + j - ini;
+      lcs[k] = a[i] === b[j] ? 1 + lcs[k + ancho + 1] : Math.max(lcs[k + ancho], lcs[k + 1]);
+    }
+    let i = ini, j = ini;
+    while (i < na || j < nb) {
+      const k = (i - ini) * ancho + j - ini;
+      if (i < na && j < nb && a[i] === b[j]) { agregar("igual", a[i++]); j++; }
+      else if (i < na && (j === nb || lcs[k + ancho] >= lcs[k + 1])) agregar("del", a[i++]);
+      else agregar("ins", b[j++]);
+    }
+  }
+  agregar("igual", a.slice(na).join(""));
+  return trozos;
+}
+
+function alinearPaginas(a, b) {
+  const ancho = b.length + 1, resultado = [];
+  const similitud = (x, y) => {
+    if (x.texto === y.texto && x.huella === y.huella) return 1;
+    const visual = () => {
+      let distancia = 0, tinta = 0;
+      for (let i = 0; i < x.miniatura.length; i++) {
+        distancia += Math.abs(x.miniatura[i] - y.miniatura[i]);
+        tinta += Math.max(x.miniatura[i], y.miniatura[i]);
+      }
+      return tinta ? 1 - distancia / tinta : 1;
+    };
+    if (!x.palabras.size && !y.palabras.size) return visual() * 0.85;
+    let comunes = 0;
+    for (const p of x.palabras) if (y.palabras.has(p)) comunes++;
+    const texto = 2 * comunes / (x.palabras.size + y.palabras.size);
+    return texto > 0.5 ? Math.min(0.99, texto * 0.92 + visual() * 0.08) : texto;
+  };
+  if ((a.length + 1) * ancho > 2e6) {
+    let i = 0, j = 0;
+    while (i < a.length || j < b.length) {
+      if (i < a.length && j < b.length && similitud(a[i], b[j]) < 0.75) {
+        const siguientesB = b.slice(j + 1, j + 13).findIndex((p) => similitud(a[i], p) === 1);
+        const siguientesA = a.slice(i + 1, i + 13).findIndex((p) => similitud(p, b[j]) === 1);
+        if (siguientesB !== -1 && (siguientesA === -1 || siguientesB <= siguientesA)) { resultado.push([null, b[j++]]); continue; }
+        if (siguientesA !== -1) { resultado.push([a[i++], null]); continue; }
+      }
+      resultado.push([a[i++] || null, b[j++] || null]);
+    }
+    return resultado;
+  }
+  const costos = new Float32Array((a.length + 1) * ancho), pasos = new Uint8Array(costos.length);
+  for (let i = a.length; i >= 0; i--) for (let j = b.length; j >= 0; j--) {
+    if (i === a.length && j === b.length) continue;
+    const k = i * ancho + j;
+    const borrar = i < a.length ? 1 + costos[k + ancho] : Infinity;
+    const insertar = j < b.length ? 1 + costos[k + 1] : Infinity;
+    const par = i < a.length && j < b.length ? 1.75 * (1 - similitud(a[i], b[j])) + costos[k + ancho + 1] : Infinity;
+    costos[k] = Math.min(par, borrar, insertar);
+    pasos[k] = par <= borrar && par <= insertar ? 1 : borrar <= insertar ? 2 : 3;
+  }
+  let i = 0, j = 0;
+  while (i < a.length || j < b.length) {
+    const paso = pasos[i * ancho + j];
+    resultado.push([paso !== 3 ? a[i++] : null, paso !== 2 ? b[j++] : null]);
+  }
+  return resultado;
+}
+
+async function lienzoDePagina(pagina, escala) {
+  const viewport = pagina.getViewport({ scale: escala });
+  const c = lienzoNuevo(Math.ceil(viewport.width), Math.ceil(viewport.height));
+  await pagina.render({ canvasContext: c.getContext("2d"), viewport, background: "#fff" }).promise;
+  return c;
+}
+
+async function fichasDeComparacion(doc, progreso) {
+  const fichas = [], lado = 10, mini = lienzoNuevo(lado, lado);
+  const ctx = mini.getContext("2d", { willReadFrequently: true });
+  for (let n = 1; n <= doc.numPages; n++) {
+    progreso(n, doc.numPages);
+    const pagina = await doc.getPage(n), { items } = await pagina.getTextContent();
+    const texto = items.map((it) => typeof it.str === "string" ? it.str + (it.hasEOL ? "\n" : "") : "").join("").trim();
+    const v = pagina.getViewport({ scale: 1 });
+    const c = await lienzoDePagina(pagina, 80 / Math.max(v.width, v.height));
+    const pixeles = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    const huella = [c.width, c.height, crc32(pixeles)].join("/");
+    ctx.drawImage(c, 0, 0, lado, lado);
+    const muestra = ctx.getImageData(0, 0, lado, lado).data, miniatura = new Uint8Array(lado * lado);
+    for (let i = 0; i < miniatura.length; i++) {
+      const k = i * 4;
+      miniatura[i] = 255 - Math.min(muestra[k], muestra[k + 1], muestra[k + 2]);
+    }
+    c.width = 0;
+    pagina.cleanup();
+    fichas.push({ pagina, n, texto, huella, miniatura, palabras: new Set(texto.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []) });
+  }
+  mini.width = 0;
+  return fichas;
+}
+
+async function superponerPaginas(a, b, salida) {
+  const medidas = [a, b].filter(Boolean).map((p) => p.pagina.getViewport({ scale: 1 }));
+  const w = Math.max(...medidas.map((v) => v.width)), h = Math.max(...medidas.map((v) => v.height));
+  const escala = Math.min(110 / 72, 1400 / Math.max(w, h)), W = Math.ceil(w * escala), H = Math.ceil(h * escala);
+  const pixeles = async (ficha) => {
+    if (!ficha) return new Uint8ClampedArray(W * H * 4).fill(255);
+    const c = await lienzoDePagina(ficha.pagina, escala);
+    const datos = c.getContext("2d").getImageData(0, 0, W, H).data;
+    c.width = 0;
+    ficha.pagina.cleanup();
+    return datos;
+  };
+  const x = await pixeles(a), y = await pixeles(b);
+  let cambios = 0;
+  for (let k = 0; k < x.length; k += 4) {
+    const distinto = x[k] !== y[k] || x[k + 1] !== y[k + 1] || x[k + 2] !== y[k + 2] || x[k + 3] !== y[k + 3];
+    if (distinto) cambios++;
+    if (!salida) continue;
+    if (distinto) {
+      const intensidad = Math.min(x[k], x[k + 1], x[k + 2], y[k], y[k + 1], y[k + 2]);
+      x[k] = 225 + intensidad * 0.1; x[k + 1] = 32 + intensidad * 0.55; x[k + 2] = 112 + intensidad * 0.4;
+    } else {
+      x[k] = (255 + x[k]) / 2; x[k + 1] = (255 + x[k + 1]) / 2; x[k + 2] = (255 + x[k + 2]) / 2;
+    }
+    x[k + 3] = 255;
+  }
+  if (salida) {
+    salida.width = W; salida.height = H;
+    salida.getContext("2d").putImageData(new ImageData(x, W, H), 0, 0);
+  }
+  return cambios;
+}
+
+let archivosCP = [], cambiosCP = [], documentosCP = [], indiceCP = 0, turnoCP = 0, ocupadoCP = false;
+function actualizarArchivosCP() {
+  turnoCP++;
+  $("resultadoCP").hidden = true;
+  $("opcionesCP").hidden = archivosCP.length === 0;
+  $("invertirCP").hidden = archivosCP.length < 2;
+  $("botonCP").disabled = archivosCP.length !== 2;
+  $("infoCP").textContent = archivosCP.map((f, i) => `${i === 0 ? "Anterior" : "Nueva"}: ${f.name}`).join(" · ");
+  aviso("avisoCP", archivosCP.length === 1 ? "Agrega el segundo PDF." : "");
+}
+zonaDeArchivos($("zonaCP"), $("archivoCP"), (fs) => {
+  if (ocupadoCP) return;
+  if (!fs.length || fs.length > 2 || !fs.every(esPdf)) { aviso("avisoCP", "Elige uno o dos archivos PDF.", true); return; }
+  archivosCP = fs.length === 1 && archivosCP.length === 1 ? [...archivosCP, ...fs] : fs;
+  actualizarArchivosCP();
+}, false);
+$("invertirCP").onclick = () => {
+  if (ocupadoCP) return;
+  archivosCP.reverse();
+  actualizarArchivosCP();
+};
+function paginasComparadas({ a, b }) {
+  return `Anterior: ${a?.n ?? "sin página"} · Nueva: ${b?.n ?? "sin página"}`;
+}
+async function mostrarDiferenciaCP() {
+  const turno = ++turnoCP, cambio = cambiosCP[indiceCP];
+  if (!cambio) return;
+  const visual = $("modoCP").value === "visual";
+  $("paginaCP").textContent = `Diferencia ${indiceCP + 1} de ${cambiosCP.length} · ${paginasComparadas(cambio)}`;
+  $("anteriorCP").disabled = indiceCP === 0;
+  $("siguienteCP").disabled = indiceCP === cambiosCP.length - 1;
+  $("textoCP").hidden = visual;
+  $("visualCP").hidden = true;
+  if (visual) {
+    const c = lienzoNuevo(1, 1);
+    await superponerPaginas(cambio.a, cambio.b, c);
+    if (turno === turnoCP) {
+      const salida = $("visualCP");
+      salida.width = c.width; salida.height = c.height;
+      salida.getContext("2d").drawImage(c, 0, 0);
+      salida.hidden = false;
+    }
+    c.width = 0;
+  } else {
+    $("textoCP").replaceChildren();
+    if (!cambio.trozos.some((t) => t.tipo !== "igual")) {
+      $("textoCP").textContent = "Sin cambios de texto en estas páginas. Revisa el modo visual.";
+      return;
+    }
+    for (const { tipo, texto } of cambio.trozos) {
+      if (tipo === "igual") $("textoCP").append(texto);
+      else {
+        const marca = document.createElement(tipo);
+        marca.textContent = texto;
+        $("textoCP").append(marca);
+      }
+    }
+  }
+}
+function navegarDiferenciaCP(paso) {
+  indiceCP += paso;
+  mostrarDiferenciaCP().catch((e) => aviso("avisoCP", e.message, true));
+}
+$("modoCP").onchange = () => navegarDiferenciaCP(0);
+$("anteriorCP").onclick = () => navegarDiferenciaCP(-1);
+$("siguienteCP").onclick = () => navegarDiferenciaCP(1);
+$("botonCP").onclick = async () => {
+  if (ocupadoCP || archivosCP.length !== 2) return;
+  ocupadoCP = $("botonCP").disabled = $("invertirCP").disabled = true;
+  $("resultadoCP").hidden = true;
+  $("salidaCP").replaceChildren();
+  aviso("avisoReporteCP", "");
+  turnoCP++;
+  try {
+    await Promise.all(documentosCP.map((d) => d.destroy()));
+    documentosCP = [];
+    const pdfjs = await pdfJs(), fichas = [];
+    for (const [i, f] of archivosCP.entries()) {
+      const tarea = pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) });
+      documentosCP.push(tarea);
+      fichas.push(await fichasDeComparacion(await tarea.promise, (n, total) => aviso("avisoCP", `Leyendo PDF ${i + 1}: página ${n} de ${total}…`)));
+    }
+    cambiosCP = [];
+    const pares = alinearPaginas(...fichas);
+    for (const [i, [a, b]] of pares.entries()) {
+      aviso("avisoCP", `Comparando página ${i + 1} de ${pares.length}…`);
+      const visual = await superponerPaginas(a, b);
+      if (visual || !a || !b || a.texto !== b.texto) cambiosCP.push({ a, b, visual, trozos: diferenciasPorPalabra(a?.texto || "", b?.texto || "") });
+    }
+    aviso("avisoCP", cambiosCP.length ? `${paginasTxt(cambiosCP.length)} con cambios` : "No se encontraron diferencias.");
+    indiceCP = 0;
+    $("resultadoCP").hidden = !cambiosCP.length;
+    await mostrarDiferenciaCP();
+  } catch (e) {
+    await Promise.allSettled(documentosCP.map((d) => d.destroy()));
+    documentosCP = [];
+    aviso("avisoCP", e.message, true);
+  } finally { ocupadoCP = $("botonCP").disabled = $("invertirCP").disabled = false; }
+};
+
+async function reporteDeComparacion(cambios, archivos) {
+  const { PDFDocument, StandardFonts, rgb } = await pdfLib();
+  const doc = await PDFDocument.create(), fuente = await doc.embedFont(StandardFonts.Helvetica);
+  const caracteres = new Set(fuente.getCharacterSet());
+  const textoPdf = (s) => [...s].map((c) => caracteres.has(c.codePointAt(0)) || c === "\n" ? c : c === "\t" ? " " : "?").join("");
+  const negro = rgb(0.13, 0.16, 0.2), verde = rgb(0.12, 0.40, 0.21), rojo = rgb(0.65, 0.16, 0.21);
+  const tam = 10;
+  let hoja, x, y;
+  const paginaNueva = () => { hoja = doc.addPage([595, 842]); x = 36; y = 796; };
+  const renglon = () => { x = 36; y -= 15; if (y < 46) paginaNueva(); };
+  const escribir = (texto, tipo = "igual") => {
+    for (const fragmento of textoPdf(texto).match(/[^\s]+|[^\S\n]+|\n/g) || []) {
+      if (fragmento === "\n") { renglon(); continue; }
+      if (x + fuente.widthOfTextAtSize(fragmento, tam) > 558 && x > 36) renglon();
+      const dibujar = (s) => {
+        const ancho = fuente.widthOfTextAtSize(s, tam);
+        if (x + ancho > 558) renglon();
+        if (tipo !== "igual") hoja.drawRectangle({ x, y: y - 2, width: ancho, height: 12,
+          color: tipo === "ins" ? rgb(0.85, 0.97, 0.87) : rgb(0.99, 0.87, 0.87) });
+        hoja.drawText(s, { x, y, font: fuente, size: tam, color: tipo === "ins" ? verde : tipo === "del" ? rojo : negro });
+        if (tipo === "del") hoja.drawLine({ start: { x, y: y + 3 }, end: { x: x + ancho, y: y + 3 }, thickness: 0.55, color: rojo });
+        x += ancho;
+      };
+      if (fuente.widthOfTextAtSize(fragmento, tam) > 522) for (const c of fragmento) dibujar(c);
+      else dibujar(fragmento);
+    }
+  };
+  for (const [i, cambio] of cambios.entries()) {
+    paginaNueva();
+    escribir(`Comparación de PDF · ${paginasTxt(cambios.length)} con cambios\n${archivos[0].name} a ${archivos[1].name}\n`);
+    escribir(`Diferencia ${i + 1} de ${cambios.length} · ${paginasComparadas(cambio)}\n\n`);
+    escribir("Texto añadido", "ins"); escribir("  "); escribir("Texto quitado", "del"); escribir("\n\n");
+    if (cambio.trozos.some((t) => t.tipo !== "igual")) {
+      let anterior;
+      for (const t of cambio.trozos) {
+        if (anterior?.tipo === "del" && t.tipo === "ins" && /\p{L}|\p{N}/u.test(anterior.texto.at(-1) || "") &&
+            /\p{L}|\p{N}/u.test(t.texto[0] || "")) escribir(" ");
+        escribir(t.texto, t.tipo);
+        anterior = t;
+      }
+    } else escribir("Sin cambios de texto.");
+    if (cambio.visual) {
+      const c = lienzoNuevo(1, 1);
+      await superponerPaginas(cambio.a, cambio.b, c);
+      const im = await doc.embedPng(await guardarImagen(c, "png"));
+      const escala = Math.min(523 / c.width, 675 / c.height), w = c.width * escala, h = c.height * escala;
+      c.width = 0;
+      if (y < h + 90) {
+        paginaNueva();
+        escribir(`Diferencia ${i + 1} de ${cambios.length} · ${paginasComparadas(cambio)}`);
+      }
+      renglon(); renglon();
+      escribir("Páginas superpuestas · pixeles distintos en rosa");
+      hoja.drawImage(im, { x: 36, y: y - h - 12, width: w, height: h });
+    }
+  }
+  return doc.save();
+}
+$("reporteCP").onclick = async () => {
+  if (ocupadoCP || !cambiosCP.length) return;
+  ocupadoCP = $("reporteCP").disabled = $("botonCP").disabled = $("invertirCP").disabled = true;
+  aviso("avisoReporteCP", "Armando el reporte…");
+  try {
+    const bytes = await reporteDeComparacion(cambiosCP, archivosCP);
+    filaDescarga($("salidaCP"), bytes, sinExt(archivosCP[1].name) + " (comparación).pdf", `${paginasTxt(cambiosCP.length)} con cambios`);
+    aviso("avisoReporteCP", "Reporte listo.");
+  } catch (e) { aviso("avisoReporteCP", e.message, true); }
+  finally { ocupadoCP = $("reporteCP").disabled = $("botonCP").disabled = $("invertirCP").disabled = false; }
+};
+
+// ---------------------------------------------------------------- Texto posicionado, tablas y Markdown
+async function textoPosicionado(pdfjs, pagina) {
+  const v = pagina.getViewport({ scale: 1 }), tc = await pagina.getTextContent();
+  const trozos = [];
+  for (const it of tc.items) {
+    if (!it.str?.trim()) continue;
+    const [a, b, c, d, x, y] = pdfjs.Util.transform(v.transform, it.transform);
+    const tam = Math.hypot(c, d);
+    trozos.push({ texto: it.str.trim(), x, y, ancho: it.width * pagina.userUnit, tam,
+      angulo: Math.atan2(b, a), fuente: it.fontName, estilos: tc.styles[it.fontName] });
+  }
+  return { v, trozos };
+}
+
+async function lineasDeTabla(pdfjs, pagina, v) {
+  const { fnArray, argsArray } = await pagina.getOperatorList();
+  const O = pdfjs.OPS, pila = [], horizontales = [], verticales = [];
+  let m = v.transform, camino = [], anterior;
+  const punto = (x, y) => pdfjs.Util.applyTransform([x, y], m);
+  const segmento = (p) => { if (anterior) camino.push([anterior, p]); anterior = p; };
+  const pintarTrazo = [O.stroke, O.closeStroke, O.fillStroke, O.eoFillStroke, O.closeFillStroke, O.closeEOFillStroke];
+  const terminar = [...pintarTrazo, O.fill, O.eoFill, O.endPath];
+  for (const [k, op] of fnArray.entries()) {
+    const a = argsArray[k];
+    if (op === O.save || op === O.paintFormXObjectBegin) {
+      pila.push(m);
+      if (op === O.paintFormXObjectBegin && a?.[0]) m = pdfjs.Util.transform(m, a[0]);
+    } else if (op === O.restore || op === O.paintFormXObjectEnd) m = pila.pop() || v.transform;
+    else if (op === O.transform) m = pdfjs.Util.transform(m, a);
+    else if (op === O.constructPath) {
+      let i = 0;
+      for (const sub of a[0]) {
+        const d = a[1];
+        if (sub === O.rectangle) {
+          const [x, y, w, h] = d.slice(i, i + 4);
+          anterior = punto(x, y);
+          for (const p of [[x + w, y], [x + w, y + h], [x, y + h], [x, y]]) segmento(punto(...p));
+          i += 4;
+        } else if (sub === O.moveTo) { anterior = punto(d[i], d[i + 1]); i += 2; }
+        else if (sub === O.lineTo) { segmento(punto(d[i], d[i + 1])); i += 2; }
+        else if ([O.curveTo, O.curveTo2, O.curveTo3].includes(sub)) {
+          i += sub === O.curveTo ? 6 : 4;
+          anterior = punto(d[i - 2], d[i - 1]);
+        }
+      }
+    } else if (terminar.includes(op)) {
+      if (pintarTrazo.includes(op)) for (const [[x, y], [xx, yy]] of camino) {
+        if (Math.abs(x - xx) < 1 && Math.abs(y - yy) > 8) verticales.push({ x, ini: Math.min(y, yy), fin: Math.max(y, yy) });
+        if (Math.abs(y - yy) < 1 && Math.abs(x - xx) > 12) horizontales.push({ y, ini: Math.min(x, xx), fin: Math.max(x, xx) });
+      }
+      camino = []; anterior = null;
+    }
+  }
+  return { horizontales, verticales };
+}
+
+function renglonesDeTabla(trozos) {
+  const filas = [];
+  for (const t of trozos.filter((t) => Math.abs(t.angulo) < 0.1 && t.tam > 1).sort((a, b) => a.y - b.y || a.x - b.x)) {
+    const fila = filas.at(-1);
+    if (fila && Math.abs(fila.y - t.y) < Math.min(t.tam, fila.tam) * 0.38) fila.trozos.push(t);
+    else filas.push({ y: t.y, tam: t.tam, trozos: [t] });
+  }
+  return filas.map((fila) => {
+    const celdas = [];
+    for (const t of fila.trozos.sort((a, b) => a.x - b.x)) {
+      const anterior = celdas.at(-1);
+      const fin = t.x + t.ancho;
+      if (anterior && t.x - anterior.fin < Math.max(6, fila.tam * 1.15)) {
+        const espacio = t.x - anterior.fin > fila.tam * 0.14 ? " " : "";
+        anterior.texto += espacio + t.texto;
+        anterior.fin = Math.max(anterior.fin, fin);
+      } else celdas.push({ x: t.x, fin, texto: t.texto });
+    }
+    return { ...fila, celdas };
+  });
+}
+
+function tablasConLineas(filas, { horizontales, verticales }) {
+  const tablas = [], usados = new Set();
+  const reglas = horizontales.sort((a, b) => a.y - b.y);
+  for (const [i, arriba] of reglas.entries()) {
+    const divisiones = verticales.filter((v) => v.ini <= arriba.y + 2 && v.fin > arriba.y + 8 && v.x >= arriba.ini - 2 && v.x <= arriba.fin + 2);
+    if (divisiones.length < 2) continue;
+    const abajo = reglas.slice(i + 1).findLast((h) => Math.abs(h.ini - arriba.ini) < 3 && Math.abs(h.fin - arriba.fin) < 3 &&
+      divisiones.filter((v) => v.fin >= h.y - 2).length >= 2);
+    if (!abajo) continue;
+    const cortes = [...new Set([arriba.ini, ...divisiones.filter((v) => v.fin >= abajo.y - 2 && v.x > arriba.ini + 2 && v.x < arriba.fin - 2).map((v) => Math.round(v.x)), arriba.fin])].sort((a, b) => a - b);
+    if (cortes.length < 3) continue;
+    const entre = reglas.filter((h) => h.y >= arriba.y && h.y <= abajo.y && h.ini <= arriba.ini + 3 && h.fin >= arriba.fin - 3);
+    const candidatas = filas.filter((f) => f.y > arriba.y && f.y <= abajo.y && !f.trozos.some((t) => usados.has(t)));
+    const filasTabla = [];
+    for (let j = 1; j < entre.length; j++) {
+      const r = candidatas.filter((f) => f.y > entre[j - 1].y && f.y <= entre[j].y)
+        .flatMap((f) => f.trozos.filter((t) => t.x >= arriba.ini - 1 && t.x < arriba.fin));
+      if (r.length) filasTabla.push(r);
+    }
+    const valores = filasTabla.map((r) => cortes.slice(1).map((fin, n) => r.filter((t) => t.x >= cortes[n] - 1 && t.x < fin - 1).map((t) => t.texto).join(" ")));
+    if (valores.length < 2 || !valores.some((r) => r.filter(Boolean).length >= 2)) continue;
+    for (const r of filasTabla) for (const t of r) usados.add(t);
+    tablas.push({ valores, top: arriba.y, omite: (r) => r.base > arriba.y && r.base <= abajo.y && r.x0 >= arriba.ini - 2 && r.x1 <= arriba.fin + 2 });
+  }
+  return { tablas, usados };
+}
+
+function tablasPorHuecos(filas) {
+  const tablas = [];
+  for (let i = 0; i < filas.length; i++) {
+    const primera = filas[i];
+    if (primera.celdas.length < 2) continue;
+    const grupo = [primera], tolerancia = Math.max(5, primera.tam * 0.8);
+    const columnas = primera.celdas.map((c) => [{ ...c }]);
+    for (let j = i + 1; j < filas.length; j++) {
+      const fila = filas[j], anterior = grupo.at(-1);
+      const salto = fila.y - anterior.y;
+      if (salto > Math.max(32, primera.tam * 3) || fila.celdas.length !== columnas.length) break;
+      const alineadas = fila.celdas.every((c, k) => columnas[k].some((ref) =>
+        Math.abs(c.x - ref.x) <= tolerancia || Math.abs(c.fin - ref.fin) <= tolerancia));
+      // Los encabezados pueden usar otra alineación. Dos filas de datos consecutivas fijan los huecos.
+      if (!alineadas && (grupo.length !== 1 || !filas[j + 1]?.celdas.every((c, k) => fila.celdas[k] &&
+        (Math.abs(c.x - fila.celdas[k].x) <= tolerancia || Math.abs(c.fin - fila.celdas[k].fin) <= tolerancia)) ||
+        filas[j + 1].celdas.length !== columnas.length ||
+        primera.celdas.some((c, k) => c.fin < fila.celdas[k].x || c.x > fila.celdas[k].fin))) break;
+      grupo.push(fila);
+      fila.celdas.forEach((c, k) => columnas[k].push(c));
+    }
+    if (grupo.length < 2) continue;
+    const izq = Math.min(...grupo.map((f) => f.celdas[0].x)), der = Math.max(...grupo.map((f) => f.celdas.at(-1).fin));
+    tablas.push({ top: primera.y - primera.tam, valores: grupo.map((f) => f.celdas.map((c) => c.texto)),
+      omite: (r) => r.x0 >= izq - 2 && r.x1 <= der + 2 && grupo.some((f) => Math.abs(r.base - f.y) < tolerancia / 2) });
+    i += grupo.length - 1;
+  }
+  return tablas;
+}
+
+async function detectarTablas(pdfjs, pagina) {
+  const { v, trozos } = await textoPosicionado(pdfjs, pagina);
+  const filas = renglonesDeTabla(trozos);
+  const { tablas, usados } = await lineasDeTabla(pdfjs, pagina, v).then((lineas) => tablasConLineas(filas, lineas));
+  return [...tablas, ...tablasPorHuecos(renglonesDeTabla(trozos.filter((t) => !usados.has(t))))].sort((a, b) => a.top - b.top);
+}
+
+function prepararConversionPdf(id, convertir) {
+  let archivo = null, ocupado = false;
+  zonaDeArchivos($("zona" + id), $("archivo" + id), (fs) => {
+    if (ocupado) return;
+    const f = fs.find(esPdf);
+    if (!f) { aviso("aviso" + id, "Elige un archivo PDF.", true); return; }
+    archivo = f;
+    $("info" + id).textContent = f.name;
+    $("opciones" + id).hidden = false;
+    aviso("aviso" + id, "");
+  }, false);
+  $("boton" + id).onclick = async () => {
+    if (!archivo || ocupado) return;
+    ocupado = $("boton" + id).disabled = true;
+    aviso("aviso" + id, "Abriendo PDF…");
+    try {
+      await conPdfLocal(archivo, (doc, pdfjs) => convertir(archivo, doc, pdfjs));
+    } catch (e) {
+      aviso("aviso" + id, e.name === "PasswordException" ? "Este PDF tiene contraseña. Usa primero «Quitar contraseña»." : e.message, true);
+    } finally { ocupado = $("boton" + id).disabled = false; }
+  };
+}
+
+const utf8 = (s) => new TextEncoder().encode(s);
+const escaparMd = (s) => s.replace(/[\\`*_{}\[\]<>#|]/g, (c) => "\\" + c);
+function parrafoMarkdown(b) {
+  const trozos = b.trozos.map((t) => ({ ...t }));
+  const primera = trozos[0];
+  let prefijo = "";
+  const lista = primera.t.match(/^(?:([0-9]{1,3})[.)]|([a-zA-Z][.)]|[•·▪●○■◦\-–—*➢►✓]))\s+/);
+  if (lista) {
+    prefijo = lista[1] ? lista[1] + ". " : "- ";
+    primera.t = primera.t.slice(lista[0].length);
+  } else if (b.titulo) prefijo = "#".repeat(b.titulo) + " ";
+  const texto = trozos.map((t) => {
+    const m = t.t.match(/^(\s*)(.*?)(\s*)$/s), estilo = t.negrita && t.cursiva ? "***" : t.negrita ? "**" : t.cursiva ? "*" : "";
+    if (!m[2]) return m[1];
+    return m[1] + estilo + escaparMd(m[2]).replace(/\t/g, " ") + estilo + m[3];
+  }).join("").trim();
+  return prefijo + (prefijo ? texto : texto.replace(/^(?:([-+=])\s|(\d+[.)])\s)/, (v) => v.replace(/[+=.\-) ]/, (c) => "\\" + c)));
+}
+function tablaMarkdown({ valores }) {
+  const fila = (r) => "| " + r.map(escaparMd).join(" | ") + " |";
+  return [fila(valores[0]), fila(valores[0].map(() => "---")), ...valores.slice(1).map(fila)].join("\n");
+}
+prepararConversionPdf("PM", async (f, doc, pdfjs) => {
+  const imagenes = $("imagenesPM").checked, partes = [], adjuntos = [];
+  for (let n = 1; n <= doc.numPages; n++) {
+    aviso("avisoPM", `Leyendo página ${n} de ${doc.numPages}…`);
+    const pagina = await doc.getPage(n), tablas = await detectarTablas(pdfjs, pagina);
+    const { bloques } = await leerPaginaWord(pdfjs, pagina, imagenes, (r) => tablas.some((t) => t.omite(r)));
+    const enOrden = [...tablas, ...bloques].sort((a, b) => a.top - b.top);
+    const contenido = [];
+    for (const b of enOrden) {
+      if (b.valores) contenido.push({ texto: tablaMarkdown(b) });
+      else if (b.tipo === "p") contenido.push({ texto: parrafoMarkdown(b), margen: b.margen });
+      else {
+        const nombre = `imagenes/imagen-${adjuntos.length + 1}.jpg`;
+        adjuntos.push({ nombre, bytes: b.bytes });
+        contenido.push({ texto: `![Imagen de la página ${n}](${nombre})` });
+      }
+    }
+    partes.push(contenido);
+    pagina.cleanup();
+  }
+  const margenes = new Map();
+  for (const parte of partes) for (const m of new Set(parte.map((b) => b.margen).filter(Boolean))) margenes.set(m, (margenes.get(m) || 0) + 1);
+  const texto = partes.flat().filter((b) => !b.margen || margenes.get(b.margen) < 2).map((b) => b.texto).join("\n\n").trim();
+  if (!texto) throw new Error("No se encontró texto. Si el PDF es escaneado, usa primero «Reconocer texto».");
+  const markdown = texto + "\n", nombre = sinExt(f.name);
+  const bytes = utf8(markdown);
+  $("textoPM").value = markdown;
+  $("copiarPM").hidden = false;
+  filaDescarga($("salidaPM"), bytes, nombre + ".md", paginasTxt(doc.numPages), "text/markdown;charset=utf-8");
+  if (adjuntos.length) filaDescarga($("salidaPM"), zipSimple([{ nombre: "documento.md", bytes }, ...adjuntos]), nombre + " (Markdown e imágenes).zip", `${adjuntos.length} imágenes`, "application/zip");
+  aviso("avisoPM", "Markdown listo.");
+});
+$("copiarPM").onclick = async () => {
+  const campo = $("textoPM");
+  try {
+    await navigator.clipboard.writeText(campo.value);
+    campo.hidden = true;
+    aviso("avisoPM", "Markdown copiado.");
+  } catch {
+    campo.hidden = false;
+    campo.focus();
+    campo.select();
+    aviso("avisoPM", "El navegador no dio acceso al portapapeles. Copia el texto seleccionado.");
+  }
+};
+
+// ---------------------------------------------------------------- PDF a Excel
+const X_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+const X_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const X_EMPAQUE = "http://schemas.openxmlformats.org/package/2006";
+function paqueteOffice(principal, tipo, partes, extensiones = {}) {
+  const tipos = { rels: "application/vnd.openxmlformats-package.relationships+xml", xml: "application/xml", ...extensiones };
+  const contenido = Object.entries(tipos).map(([ext, mime]) => `<Default Extension="${ext}" ContentType="${mime}"/>`).join("");
+  const declaraciones = partes.filter((p) => p.mime).map((p) => `<Override PartName="/${p.nombre}" ContentType="${p.mime}"/>`).join("");
+  const archivoTipos = { nombre: "[Content_Types].xml", texto: `<Types xmlns="${X_EMPAQUE}/content-types">${contenido}${declaraciones}</Types>` };
+  const puerta = relacionesOffice("_rels/.rels", [[tipo, principal]]);
+  return zipSimple([archivoTipos, puerta, ...partes].map((p) => ({ nombre: p.nombre, bytes: p.bytes || utf8(X_DECL + p.texto) })));
+}
+function relacionesOffice(nombre, destinos) {
+  return { nombre, texto: `<Relationships xmlns="${X_EMPAQUE}/relationships">${destinos.map(([tipo, destino], i) =>
+    `<Relationship Id="rId${i + 1}" Type="${X_REL}/${tipo}" Target="${destino}"/>`).join("")}</Relationships>` };
+}
+function valorExcel(texto) {
+  let s = texto.trim().replace(/[−–]/g, "-");
+  const negativo = /^\(.*\)$/.test(s);
+  if (negativo) s = s.slice(1, -1).trim();
+  const porcentaje = /%$/.test(s);
+  if (porcentaje) s = s.slice(0, -1).trim();
+  s = s.replace(/^(\s*[+-]?)\s*(?:MXN\s*)?\$/i, "$1").replace(/\s*(?:MXN|USD)$/i, "").trim();
+  if (negativo && /^[+-]/.test(s)) return null;
+  if (!/^[+-]?(?:(?:\d+|\d{1,3}(?:[,\u00a0\u202f ]\d{3})+)(?:\.\d+)?|\.\d+)$/.test(s)) return null;
+  let numero = Number(s.replace(/[,\s]/g, ""));
+  if (!Number.isFinite(numero)) return null;
+  if (negativo) numero = -numero;
+  return { numero: porcentaje ? numero / 100 : numero, estilo: porcentaje ? s.includes(".") ? 2 : 1 : 0 };
+}
+function columnaExcel(indice) {
+  let s = "";
+  for (let n = indice + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s;
+  return s;
+}
+function xlsxDe(hojas) {
+  const ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+  const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml";
+  const partes = [{ nombre: "xl/workbook.xml", mime: mime + ".sheet.main+xml", texto:
+    `<workbook xmlns="${ns}" xmlns:r="${X_REL}"><sheets>${hojas.map(({ nombre }, i) =>
+      `<sheet name="${xml(nombre)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>` }];
+  partes.push(relacionesOffice("xl/_rels/workbook.xml.rels", [...hojas.map((_, i) => ["worksheet", `worksheets/sheet${i + 1}.xml`]), ["styles", "styles.xml"]]));
+  partes.push({ nombre: "xl/styles.xml", mime: mime + ".styles+xml", texto:
+    `<styleSheet xmlns="${ns}"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3">${[0, 9, 10].map((id) => `<xf numFmtId="${id}" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`).join("")}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` });
+  for (const [i, { filas }] of hojas.entries()) {
+    if (filas.length > 1048576 || filas.some((r) => r.length > 16384)) throw new Error("La tabla supera el tamaño máximo de una hoja de Excel.");
+    const datos = filas.map((r, j) => {
+      const celdas = r.map((s, k) => {
+        if (!s) return "";
+        const ref = columnaExcel(k) + (j + 1), v = valorExcel(s);
+        return v ? `<c r="${ref}" s="${v.estilo}"><v>${v.numero}</v></c>` :
+          `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xml(s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, ""))}</t></is></c>`;
+      }).join("");
+      return `<row r="${j + 1}">${celdas}</row>`;
+    }).join("");
+    partes.push({ nombre: `xl/worksheets/sheet${i + 1}.xml`, mime: mime + ".worksheet+xml",
+      texto: `<worksheet xmlns="${ns}"><sheetData>${datos}</sheetData></worksheet>` });
+  }
+  return paqueteOffice("xl/workbook.xml", "officeDocument", partes);
+}
+prepararConversionPdf("PX", async (f, doc, pdfjs) => {
+  const juntas = $("hojasPX").value === "una", hojas = [], todo = [];
+  let cantidad = 0;
+  for (let n = 1; n <= doc.numPages; n++) {
+    aviso("avisoPX", `Buscando tablas en la página ${n} de ${doc.numPages}…`);
+    const pagina = await doc.getPage(n), tablas = await detectarTablas(pdfjs, pagina);
+    const filas = tablas.flatMap((t, i) => i ? [[], ...t.valores] : t.valores);
+    cantidad += tablas.length;
+    if (juntas) {
+      if (filas.length) { if (todo.length) todo.push([]); todo.push(...filas); }
+    } else hojas.push({ nombre: `Página ${n}`, filas });
+    pagina.cleanup();
+  }
+  if (!cantidad) throw new Error("No se encontraron tablas. Si el PDF es escaneado, usa primero «Reconocer texto».");
+  if (juntas) hojas.push({ nombre: "Tablas", filas: todo });
+  const detalle = cantidad === 1 ? "1 tabla" : `${cantidad} tablas`;
+  filaDescarga($("salidaPX"), xlsxDe(hojas), sinExt(f.name) + ".xlsx", detalle, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  aviso("avisoPX", `Listo. Se detectaron ${cantidad === 1 ? "una tabla" : cantidad + " tablas"}.`);
+});
+
+// ---------------------------------------------------------------- PDF a PowerPoint
+async function fondoPowerPoint(pdfjs, pagina, editable) {
+  const { v, trozos } = await textoPosicionado(pdfjs, pagina);
+  const escala = Math.min(160 / 72, Math.sqrt(22e6 / (v.width * v.height)), 10000 / Math.max(v.width, v.height));
+  const entero = async () => ({ v, editable: false, fondo: await lienzoDePagina(pagina, escala), trozos: [] });
+  if (!editable || !trozos.length || trozos.some((t) => Math.abs(t.angulo) > 0.02 || t.estilos?.vertical)) return entero();
+  if ((await pagina.getAnnotations()).some((a) => a.hasAppearance || a.subtype === "Widget")) return entero();
+  const O = pdfjs.OPS, lista = await pagina.getOperatorList();
+  const operadoresDeTexto = new Set([O.showText, O.showSpacedText, O.nextLineShowText, O.nextLineSetSpacingShowText]);
+  if (lista.fnArray.some((op, i) => (op === O.setTextRenderingMode && lista.argsArray[i][0] !== 0) ||
+    (operadoresDeTexto.has(op) && op !== O.showText))) return entero();
+
+  // El PDF.js vendorizado no ofrece un filtro público. Se omite showText en su lista de
+  // renderizado para esta página. Si no se reconoce la lista, se conserva la página completa.
+  const viewport = pagina.getViewport({ scale: escala });
+  const fondo = lienzoNuevo(Math.ceil(viewport.width), Math.ceil(viewport.height));
+  const existentes = new Set(pagina._intentStates?.values());
+  const tarea = pagina.render({ canvasContext: fondo.getContext("2d"), viewport, background: "#fff", annotationMode: pdfjs.AnnotationMode.DISABLE });
+  const estado = [...(pagina._intentStates?.values() || [])].find((e) => !existentes.has(e) && e.operatorList);
+  const ops = estado?.operatorList, argumentos = ops?.argsArray;
+  let omitidos = 0, completa = false;
+  if (Array.isArray(argumentos)) ops.argsArray = new Proxy(argumentos, {
+    get(datos, clave) {
+      if (typeof clave === "string" && /^\d+$/.test(clave) && ops.fnArray[clave] === O.showText) {
+        omitidos++;
+        return [[]];
+      }
+      return Reflect.get(datos, clave);
+    },
+  });
+  try {
+    await tarea.promise;
+    completa = true;
+  } catch (e) {
+    console.warn("PDF a PowerPoint: se usará la página completa.", e);
+  } finally {
+    if (argumentos) ops.argsArray = argumentos;
+  }
+  if (!completa || !omitidos) {
+    fondo.width = 0;
+    return entero();
+  }
+  const estilos = new Map();
+  for (const t of trozos) {
+    if (!estilos.has(t.fuente)) {
+      const fuente = pagina.commonObjs.has(t.fuente) ? pagina.commonObjs.get(t.fuente) : null;
+      if (!fuente || fuente.isType3Font) { fondo.width = 0; return entero(); }
+      estilos.set(t.fuente, estiloDeFuente(fuente, t.estilos));
+    }
+    Object.assign(t, estilos.get(t.fuente));
+  }
+  return { v, editable: true, fondo, trozos };
+}
+
+const PPT_NS = "http://schemas.openxmlformats.org/presentationml/2006/main";
+const DIBUJO_NS = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const PPT_MIME = "application/vnd.openxmlformats-officedocument.presentationml";
+const pptNs = `xmlns:p="${PPT_NS}" xmlns:a="${DIBUJO_NS}" xmlns:r="${X_REL}"`;
+const emu = (pt) => Math.round(pt * 12700);
+const grupoPpt = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>';
+const mapaColorPpt = '<p:clrMap accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" bg1="lt1" bg2="lt2" folHlink="folHlink" hlink="hlink" tx1="dk1" tx2="dk2"/>';
+function temaPpt() {
+  const colores = { dk1: "000000", lt1: "FFFFFF", dk2: "243146", lt2: "F3F5F8", accent1: "3167A4", accent2: "BD5C46",
+    accent3: "54814B", accent4: "866387", accent5: "377E86", accent6: "AC762F", hlink: "0563C1", folHlink: "954F72" };
+  const base = '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>';
+  const fuentes = '<a:latin typeface="Arial"/><a:ea typeface=""/><a:cs typeface=""/>';
+  return `<a:theme xmlns:a="${DIBUJO_NS}" name="Navaja PDF"><a:themeElements><a:clrScheme name="Navaja PDF">${Object.entries(colores).map(([k, v]) =>
+    `<a:${k}><a:srgbClr val="${v}"/></a:${k}>`).join("")}</a:clrScheme><a:fontScheme name="Arial"><a:majorFont>${fuentes}</a:majorFont><a:minorFont>${fuentes}</a:minorFont></a:fontScheme>
+    <a:fmtScheme name="Navaja PDF"><a:fillStyleLst>${base.repeat(3)}</a:fillStyleLst><a:lnStyleLst>${[6350, 12700, 19050].map((w) =>
+      `<a:ln w="${w}">${base}<a:prstDash val="solid"/></a:ln>`).join("")}</a:lnStyleLst><a:effectStyleLst>${"<a:effectStyle><a:effectLst/></a:effectStyle>".repeat(3)}</a:effectStyleLst><a:bgFillStyleLst>${base.repeat(3)}</a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`;
+}
+function posicionPpt(x, y, w, h) {
+  return `<a:xfrm><a:off x="${emu(x)}" y="${emu(y)}"/><a:ext cx="${emu(w)}" cy="${emu(h)}"/></a:xfrm>`;
+}
+function contenidoDiapositiva({ v, trozos }, W, H) {
+  const escala = Math.min(W / v.width, H / v.height);
+  const w = v.width * escala, h = v.height * escala, dx = (W - w) / 2, dy = (H - h) / 2;
+  const marco = '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>';
+  const imagen = `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Página PDF"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+    <p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${posicionPpt(dx, dy, w, h)}${marco}</p:spPr></p:pic>`;
+  const cuadros = trozos.map((t, i) => {
+    const ascenso = t.estilos?.ascent ?? 0.85;
+    const pos = posicionPpt(dx + t.x * escala, dy + (t.y - t.tam * ascenso) * escala,
+      Math.max(t.tam, t.ancho + t.tam * 0.35) * escala, t.tam * 1.3 * escala);
+    const texto = xml(t.texto.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, ""));
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${i + 3}" name="Texto ${i + 1}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
+      <p:spPr>${pos}${marco}<a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0"><a:noAutofit/></a:bodyPr><a:lstStyle/>
+      <a:p><a:pPr marL="0" indent="0"/><a:r><a:rPr lang="es-MX" sz="${Math.max(100, Math.min(400000, Math.round(t.tam * escala * 100)))}"
+      b="${+t.negrita}" i="${+t.cursiva}"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="${xml(t.familia)}"/></a:rPr><a:t>${texto}</a:t></a:r></a:p></p:txBody></p:sp>`;
+  }).join("");
+  return `<p:sld ${pptNs}><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree>${grupoPpt}${imagen}${cuadros}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
+}
+async function pptxDe(doc, pdfjs, editable, progreso) {
+  const primera = (await doc.getPage(1)).getViewport({ scale: 1 });
+  const factor = Math.min(1, 4032 / Math.max(primera.width, primera.height));
+  const W = Math.max(72, primera.width * factor), H = Math.max(72, primera.height * factor);
+  const partes = [{
+    nombre: "ppt/presentation.xml", mime: PPT_MIME + ".presentation.main+xml",
+    texto: `<p:presentation ${pptNs}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>
+      <p:sldIdLst>${Array.from({ length: doc.numPages }, (_, i) => `<p:sldId id="${i + 256}" r:id="rId${i + 2}"/>`).join("")}</p:sldIdLst>
+      <p:sldSz cx="${emu(W)}" cy="${emu(H)}"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`,
+  }, {
+    nombre: "ppt/slideMasters/slideMaster1.xml", mime: PPT_MIME + ".slideMaster+xml",
+    texto: `<p:sldMaster ${pptNs}><p:cSld><p:spTree>${grupoPpt}</p:spTree></p:cSld>${mapaColorPpt}
+      <p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst></p:sldMaster>`,
+  }, {
+    nombre: "ppt/slideLayouts/slideLayout1.xml", mime: PPT_MIME + ".slideLayout+xml",
+    texto: `<p:sldLayout ${pptNs} type="blank"><p:cSld name="En blanco"><p:spTree>${grupoPpt}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`,
+  }, { nombre: "ppt/theme/theme1.xml", mime: "application/vnd.openxmlformats-officedocument.theme+xml", texto: temaPpt() }];
+  partes.push(relacionesOffice("ppt/slideMasters/_rels/slideMaster1.xml.rels", [["slideLayout", "../slideLayouts/slideLayout1.xml"], ["theme", "../theme/theme1.xml"]]));
+  partes.push(relacionesOffice("ppt/slideLayouts/_rels/slideLayout1.xml.rels", [["slideMaster", "../slideMasters/slideMaster1.xml"]]));
+  const destinos = [["slideMaster", "slideMasters/slideMaster1.xml"]];
+  let editables = 0;
+  for (let n = 1; n <= doc.numPages; n++) {
+    progreso(n);
+    const pagina = await doc.getPage(n), datos = await fondoPowerPoint(pdfjs, pagina, editable);
+    editables += Number(datos.editable);
+    partes.push({ nombre: `ppt/media/pagina${n}.jpg`, bytes: await guardarImagen(datos.fondo, "jpg", 0.92) });
+    partes.push({ nombre: `ppt/slides/slide${n}.xml`, mime: PPT_MIME + ".slide+xml", texto: contenidoDiapositiva(datos, W, H) });
+    partes.push(relacionesOffice(`ppt/slides/_rels/slide${n}.xml.rels`, [["slideLayout", "../slideLayouts/slideLayout1.xml"], ["image", `../media/pagina${n}.jpg`]]));
+    destinos.push(["slide", `slides/slide${n}.xml`]);
+    datos.fondo.width = 0;
+    pagina.cleanup();
+  }
+  partes.push(relacionesOffice("ppt/_rels/presentation.xml.rels", destinos));
+  return { bytes: paqueteOffice("ppt/presentation.xml", "officeDocument", partes, { jpg: "image/jpeg" }), editables };
+}
+prepararConversionPdf("PP", async (f, doc, pdfjs) => {
+  const editable = $("textoPP").checked;
+  const { bytes, editables } = await pptxDe(doc, pdfjs, editable, (n) => aviso("avisoPP", `Creando diapositiva ${n} de ${doc.numPages}…`));
+  filaDescarga($("salidaPP"), bytes, sinExt(f.name) + ".pptx", doc.numPages === 1 ? "1 diapositiva" : `${doc.numPages} diapositivas`, PPT_MIME + ".presentation");
+  aviso("avisoPP", editable ? `Listo. Texto editable en ${editables} de ${doc.numPages} diapositivas.` : "Presentación lista.");
+});
+
+// ---------------------------------------------------------------- Marca de agua en imágenes
+async function imagenParaMarca(f) {
+  const formato = await esHeif(f) ? "heic" : await formatoDe(f);
+  if (formato === "heic") {
+    const { c } = await lienzoHeic(f);
+    try { return { formato, mapa: await createImageBitmap(c) }; }
+    finally { c.width = 0; }
+  }
+  if (!["jpg", "png", "webp"].includes(formato)) throw new Error(`«${f.name}»: elige una imagen JPG, PNG, WebP o HEIC.`);
+  return { formato, mapa: await abrirImagen(f) };
+}
+function marcaDeImagen(c, mapa, marca) {
+  const { width: w, height: h } = c, ctx = c.getContext("2d");
+  ctx.drawImage(mapa, 0, 0, w, h);
+  const corto = Math.min(w, h), margen = corto * 0.04, ancho = corto * marca.tamano;
+  ctx.save();
+  ctx.globalAlpha = marca.opacidad;
+  ctx.fillStyle = marca.color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const familia = "system-ui, sans-serif";
+  ctx.font = `700 100px ${familia}`;
+  const medir = ctx.measureText(marca.texto);
+  const tam = Math.min(corto * 0.25, ancho / Math.max(1, medir.width) * 100);
+  const logo = marca.logo;
+  const W = logo ? Math.min(ancho, h * 0.85 * logo.width / logo.height) : medir.width * tam / 100;
+  const H = logo ? W * logo.height / logo.width : tam * 1.15;
+  ctx.font = `700 ${tam}px ${familia}`;
+  const dibujar = (x, y) => {
+    if (logo) ctx.drawImage(logo, x - W / 2, y - H / 2, W, H);
+    else ctx.fillText(marca.texto, x, y);
+  };
+  const pos = marca.posicion;
+  if (pos === "mosaico") {
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(-Math.PI / 6);
+    const diagonal = Math.hypot(w, h) / 2;
+    const pasoX = Math.max(corto * 0.16, W + margen * 2);
+    const pasoY = Math.max(corto * 0.16, H + margen * 2);
+    const limiteX = Math.ceil(diagonal / pasoX), limiteY = Math.ceil(diagonal / pasoY);
+    for (let j = -limiteY; j <= limiteY; j++) for (let i = -limiteX; i <= limiteX; i++) {
+      dibujar((i + (Math.abs(j) % 2) * 0.5) * pasoX, j * pasoY);
+    }
+  } else if (pos === "centro") dibujar(w / 2, h / 2);
+  else {
+    const [x, y] = centroEn(pos, w, h, W, H, margen);
+    dibujar(x, h - y);
+  }
+  ctx.restore();
+}
+let codificadorHeic;
+async function guardarHeic(c) {
+  const url = new URL("lib/heic-enc.mjs", base);
+  codificadorHeic ||= import(url.href).then(({ default: iniciar }) => iniciar()).catch((e) => { codificadorHeic = null; throw e; });
+  const m = await codificadorHeic;
+  const { width: w, height: h } = c;
+  const datos = c.getContext("2d").getImageData(0, 0, w, h).data;
+  const resultado = m.encode(datos, w, h, 90);
+  if (!resultado) throw new Error("No se pudo guardar la imagen HEIC.");
+  return resultado;
+}
+let fotosMI = [], ocupadoMI = false, imagenPreviaMI = null, logoMI = null, turnoImagenMI = 0, turnoLogoMI = 0;
+function opcionesMarcaImagen() {
+  const valor = (id, minimo, maximo) => Math.max(minimo, Math.min(maximo, Number($(id).value)));
+  const usaLogo = $("tipoMI").value === "logo";
+  return { texto: $("textoMI").value.trim(), logo: usaLogo ? logoMI : null, usaLogo,
+    color: $("colorMI").value, posicion: $("posicionMI").value, opacidad: valor("opacidadMI", 0, 100) / 100, tamano: valor("tamanoMI", 1, 90) / 100 };
+}
+function previaMarcaImagen() {
+  const marca = opcionesMarcaImagen(), c = $("previaMI"), activa = marca.usaLogo ? !!marca.logo : !!marca.texto;
+  $("campoTextoMI").hidden = $("campoColorMI").hidden = marca.usaLogo;
+  $("campoLogoMI").hidden = !marca.usaLogo;
+  $("botonMI").disabled = ocupadoMI || !activa || !imagenPreviaMI;
+  c.hidden = !imagenPreviaMI;
+  if (!imagenPreviaMI) return;
+  const mapa = imagenPreviaMI, factor = Math.min(1, 680 / Math.max(mapa.width, mapa.height));
+  c.width = Math.max(1, Math.round(mapa.width * factor)); c.height = Math.max(1, Math.round(mapa.height * factor));
+  if (activa) marcaDeImagen(c, mapa, marca);
+  else c.getContext("2d").drawImage(mapa, 0, 0, c.width, c.height);
+}
+async function elegirPreviaMI() {
+  const turno = ++turnoImagenMI;
+  imagenPreviaMI?.close();
+  imagenPreviaMI = null;
+  previaMarcaImagen();
+  try {
+    const { mapa } = await imagenParaMarca(fotosMI[Number($("imagenMI").value)]);
+    if (turno !== turnoImagenMI) { mapa.close(); return; }
+    imagenPreviaMI = mapa;
+    aviso("avisoMI", "");
+    previaMarcaImagen();
+  } catch (e) { if (turno === turnoImagenMI) aviso("avisoMI", e.message, true); }
+}
+zonaDeArchivos($("zonaMI"), $("archivoMI"), async (fs) => {
+  if (ocupadoMI) return;
+  const imagenes = fs.filter(pareceImagen);
+  if (!imagenes.length) { aviso("avisoMI", "Elige imágenes JPG, PNG, WebP o HEIC.", true); return; }
+  fotosMI = imagenes;
+  $("imagenMI").replaceChildren(...fotosMI.map((f, i) => new Option(f.name, String(i))));
+  $("infoMI").textContent = fotosMI.length === 1 ? fotosMI[0].name : `${fotosMI.length} imágenes`;
+  $("opcionesMI").hidden = false;
+  await elegirPreviaMI();
+}, false);
+$("imagenMI").onchange = elegirPreviaMI;
+for (const id of ["tipoMI", "textoMI", "colorMI", "opacidadMI", "tamanoMI", "posicionMI"]) $(id).oninput = previaMarcaImagen;
+$("logoMI").onchange = async () => {
+  if (ocupadoMI) return;
+  const turno = ++turnoLogoMI, f = $("logoMI").files[0];
+  logoMI?.close();
+  logoMI = null;
+  previaMarcaImagen();
+  if (!f) return;
+  try {
+    const { mapa } = await imagenParaMarca(f);
+    if (turno !== turnoLogoMI) { mapa.close(); return; }
+    logoMI = mapa;
+    aviso("avisoMI", "");
+    previaMarcaImagen();
+  } catch (e) { if (turno === turnoLogoMI) aviso("avisoMI", e.message, true); }
+};
+$("botonMI").onclick = async () => {
+  if (ocupadoMI || $("botonMI").disabled) return;
+  const marca = opcionesMarcaImagen();
+  ocupadoMI = $("logoMI").disabled = $("imagenMI").disabled = true;
+  try {
+    await procesarLista("MI", { items: fotosMI.map((f) => ({ f })) }, async ({ f }) => {
+      const { mapa, formato } = await imagenParaMarca(f);
+      const c = lienzoNuevo(mapa.width, mapa.height);
+      try {
+        marcaDeImagen(c, mapa, marca);
+        const bytes = await (formato === "heic" ? guardarHeic(c) : guardarImagen(c, formato));
+        const ext = formato === "jpg" && /\.jpeg$/i.test(f.name) ? "jpeg" :
+          formato === "heic" && /\.heif$/i.test(f.name) ? "heif" : formato;
+        const nombre = sinExtImg(f.name).replace(/[\\/]/g, "_") + ` (con marca).${ext}`;
+        return { nombre, bytes, detalle: pxTxt(c.width, c.height), tipo: MIME[formato] || "image/heic" };
+      } finally { mapa.close(); c.width = 0; }
+    }, "Imágenes con marca.zip");
+  } catch (e) { aviso("avisoMI", e.message, true); }
+  finally {
+    ocupadoMI = $("logoMI").disabled = $("imagenMI").disabled = false;
+    previaMarcaImagen();
+  }
+};
 verVista();

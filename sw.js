@@ -7,12 +7,15 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "25";
+const VERSION = "26";
 const CACHE_COMPARTIDO = "convertidor-compartido";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice
+const CACHE_HEIC = "convertidor-heic-kvazaar-1";
+const ARCHIVOS_HEIC = new Set(["lib/libheif.js", "lib/libheif.wasm", "lib/heic-enc.mjs", "lib/heic-enc.wasm"]);
 const CACHE_OCR = "convertidor-ocr-7.0.0";        // cambia solo si cambia Tesseract o sus idiomas
 const APP = ["./", "index.html", "app.js", "app.css", "manifest.webmanifest", "icono.svg", "icono-192.png", "icono-512.png", "partes.json",
+             "comparar-pdf/", "pdf-a-markdown/", "pdf-a-powerpoint/", "pdf-a-excel/", "marca-de-agua-imagen/",
              "lib/pdf-lib.min.js", "lib/pdf.min.mjs", "lib/pdf.worker.min.mjs", "lib/qpdf.js", "lib/qpdf.wasm", "lo/soffice.js", "lo/soffice.worker.js", "lo/browser.js", "lo/browser.worker.global.js"];
 
 self.addEventListener("install", (e) => {
@@ -22,7 +25,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
     for (const nombre of await caches.keys()) {
-      if (nombre !== CACHE_APP && nombre !== CACHE_LO && nombre !== CACHE_OCR && nombre !== CACHE_COMPARTIDO) await caches.delete(nombre);
+      if (nombre !== CACHE_APP && nombre !== CACHE_LO && nombre !== CACHE_OCR && nombre !== CACHE_COMPARTIDO && nombre !== CACHE_HEIC) await caches.delete(nombre);
     }
     await self.clients.claim();
   })());
@@ -76,10 +79,9 @@ async function deLibreOffice(peticion, nombre) {
   return conCabeceras(resp);
 }
 
-// El lector de texto (OCR) pesa unos 9 MB y no cambia: se baja la primera vez que se usa y
-// se queda guardado aunque la app se actualice.
-async function delOcr(peticion) {
-  const cache = await caches.open(CACHE_OCR);
+// Los archivos de OCR y HEIC se bajan al usarlos y se guardan aunque la app se actualice.
+async function recursoBajoDemanda(peticion, nombreCache) {
+  const cache = await caches.open(nombreCache);
   const guardada = await cache.match(peticion, { ignoreSearch: true });
   if (guardada) return conCabeceras(guardada);
   const resp = await fetch(peticion);
@@ -154,7 +156,9 @@ self.addEventListener("fetch", (e) => {
   }
   if (url.pathname.endsWith("/lo/soffice.wasm")) return e.respondWith(deLibreOffice(e.request, "soffice.wasm"));
   if (url.pathname.endsWith("/lo/soffice.data")) return e.respondWith(deLibreOffice(e.request, "soffice.data"));
-  if (url.pathname.includes("/ocr/")) return e.respondWith(delOcr(e.request));
+  if (url.pathname.includes("/ocr/")) return e.respondWith(recursoBajoDemanda(e.request, CACHE_OCR));
+  const ruta = url.pathname.slice(new URL(self.registration.scope).pathname.length);
+  if (ARCHIVOS_HEIC.has(ruta)) return e.respondWith(recursoBajoDemanda(e.request, CACHE_HEIC));
   if (url.pathname.includes("/lo/partes/")) return;      // los pedazos van directo a la red
   e.respondWith(deLaApp(e.request));
 });

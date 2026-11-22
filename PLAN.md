@@ -21,9 +21,12 @@ Ya hecho: 24 herramientas, una página por herramienta para Google (generar.py),
 12. Escanear: girar solo + OCR en el mismo paso
 
 ## Fase 4 — Resto de iLovePDF y extras de imagen
-13. Comparar dos PDF · 14. PDF a Markdown · 15. PDF a PowerPoint · 16. PDF a Excel
+13. Comparar dos PDF ✅
+14. PDF a Markdown ✅
+15. PDF a PowerPoint ✅
+16. PDF a Excel ✅
 17. PDF/A (Ghostscript WASM, AGPL) · 18. Quitar fondo · 19. Mejorar/ampliar foto
-20. Marca de agua en imágenes · 21. Difuminar caras
+20. Marca de agua en imágenes ✅ Hecha en Fase 4 A · 21. Difuminar caras
 
 ## Fase 5 — Con servidor ☁ (etiqueta + aviso antes de usar)
 22. HTML a PDF (Cloudflare Browser Rendering)

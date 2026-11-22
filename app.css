@@ -160,3 +160,11 @@
     #lista li.fila-descarga, ul.filas li.fila-descarga { flex-wrap: wrap; }
     .fila-descarga .nombre { flex-basis: 100%; }
   }
+
+/* Comparación y vista previa de imagen */
+.fase4-lienzo { display: block; max-width: 100%; height: auto; margin: 12px 0; border-radius: 8px; }
+.diferencias-texto { white-space: pre-wrap; overflow-wrap: anywhere; }
+.diferencias-texto ins { background: #dbf5df; color: #17582a; text-decoration: none; }
+.diferencias-texto del { background: #fce0e1; color: #8e262e; }
+.diferencias-texto del + ins, .diferencias-texto ins + del { margin-inline-start: 0.23em; }
+#textoPM { width: 100%; margin-top: 12px; }
