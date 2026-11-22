@@ -9,6 +9,7 @@ async function ejecutar(env, nombre, entrada) {
   try {
     return await env.AI.run(nombre, entrada);
   } catch (e) {
+    console.error("ia:", nombre, e?.status, e?.message);
     if (e.status === 429 || /429|rate limit|quota/i.test(e.message)) error(429, "Se alcanzó el límite de IA. Intenta más tarde.");
     error(502, "Cloudflare Workers AI no pudo procesar el texto. Intenta otra vez.");
   }
@@ -43,12 +44,13 @@ export async function ia(req, env, ruta, consumir) {
   const datos = await leerJson(req, 160_000);
   if (ruta.endsWith("/traducir")) {
     const { textos, de, a } = datos;
-    if (!Array.isArray(textos) || !textos.length || textos.length > 50 || textos.some((t) => typeof t !== "string")
+    if (!Array.isArray(textos) || !textos.length || textos.length > 40 || textos.some((t) => typeof t !== "string")
         || (de !== "detectar" && !Object.hasOwn(idiomas, de)) || !Object.hasOwn(idiomas, a)) {
-      error(400, "Elige idiomas válidos y envía entre 1 y 50 textos.");
+      error(400, "Elige idiomas válidos y envía entre 1 y 40 textos.");
     }
     const total = textos.reduce((n, t) => n + t.length, 0);
     if (total > 20_000) error(413, "Cada lote admite hasta 20 000 caracteres.");
+    if (textos.some((t) => t.length > 900)) error(413, "Cada texto admite hasta 900 caracteres.");
     await consumir(total + textos.length * 100);
     let origen = de;
     if (de === "detectar") {

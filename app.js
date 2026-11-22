@@ -6407,7 +6407,7 @@ async function traducirNube(paginas, bloques, tarea) {
   }
   if (!traducciones) {
     traducciones = [];
-    const lotes = lotesNube(partes.map(({ texto }) => texto), 20_000, 50);
+    const lotes = lotesNube(partes.map(({ texto }) => texto), 20_000, 40);
     let origen = de;
     for (const lote of lotes) {
       tarea.avance(traducciones.length, partes.length, "Traduciendo");
