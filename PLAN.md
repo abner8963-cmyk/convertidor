@@ -15,7 +15,7 @@ Ya hecho: 24 herramientas, una página por herramienta para Google (generar.py),
 8. Redactar: borrar de verdad (hoy «Tapar» deja el texto dentro)
 9. HEIC a JPG (libheif en WASM)
 
-## Fase 3 — Que se sienta app
+## Fase 3 — Que se sienta app ✅ HECHA 2026-11-21
 10. Encadenar herramientas («Seguir con…», como los Workflows de iLovePDF)
 11. Abrir desde «Compartir» en el celular (Web Share Target en el manifest)
 12. Escanear: girar solo + OCR en el mismo paso

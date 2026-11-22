@@ -119,6 +119,29 @@ PNG se escribe a mano (zlib con `CompressionStream`). Volver a guardar una image
 de la cámara (fecha, ubicación). Las fotos HEIC de iPhone solo se abren donde el navegador las
 entiende (Safari).
 
+## Seguir con otra herramienta
+
+Usa «Seguir con…» junto a «Descargar» para cargar el PDF o la imagen en otra herramienta de Navaja PDF.
+Si el resultado ofrece un ZIP con varias imágenes, el menú de esa fila pasa todas las imágenes
+a la herramienta elegida. Navegar hacia atrás conserva los resultados de la
+sesión.
+
+## Abrir desde Compartir en Android
+
+En un navegador compatible, instala Navaja PDF desde el menú del navegador. Luego abre el menú
+«Compartir» de un PDF, una imagen o un archivo DOCX, XLSX o PPTX y elige Navaja PDF. La app muestra
+las herramientas disponibles para cada archivo y permite mandar el lote completo a las que lo
+aceptan. El service worker guarda los archivos temporalmente en el navegador y los retira del
+almacenamiento al abrirlos en una herramienta. Los archivos permanecen en el dispositivo.
+
+## Escanear documento
+
+Al crear el PDF, «Girar y enderezar automáticamente» prueba cuatro orientaciones sobre una copia
+reducida de la hoja y usa los renglones para corregir inclinaciones de hasta 15°. Puedes girar
+cada foto con sus flechas o desactivar el ajuste automático. Con «Hacer buscable (OCR)» se añade
+una capa invisible de texto en español e inglés para buscar y copiar desde el lector de PDF.
+La primera vez que uses cualquiera de las dos opciones se cargan los modelos de OCR de la app.
+
 ## Páginas por herramienta (generar.py)
 
 Cada herramienta tiene su dirección (`unir-pdf/`, `comprimir-pdf/`, `word-a-pdf/`…) con su título,

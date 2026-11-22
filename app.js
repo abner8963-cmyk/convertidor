@@ -1,4 +1,5 @@
 const $ = (id) => document.getElementById(id);
+const CACHE_COMPARTIDO = "convertidor-compartido"; // igual que en sw.js
 const CACHE_LO = "convertidor-lo-2.7.2";       // igual que en sw.js
 const base = new URL("./", document.baseURI);   // la raíz de la app (cada página trae su <base>)
 const MB = (b) => (b / 1e6).toFixed(0);
@@ -316,9 +317,7 @@ async function procesar() {
         const blob = new Blob([r.data], { type: "application/pdf" });
         const nombre = f.name.replace(/\.[^.]+$/, "") + ".pdf";
         nota.textContent = `PDF de ${(blob.size / 1024).toFixed(0)} KB en ${((performance.now() - t) / 1000).toFixed(1)} s${aviso}`;
-        const a = document.createElement("a");
-        a.className = "bajar"; a.href = URL.createObjectURL(blob); a.download = nombre; a.textContent = "Descargar";
-        li.append(a);
+        accionesDeDescarga(li, blob, nombre);
         notaActual = null;
       } catch (e) {
         notaActual = null;
@@ -368,7 +367,7 @@ const VISTAS = ["inicio", "office", "unir", "dividir", "organizar", "imagenes", 
   "recortarpdf", "reparar", "formulario", "sacarimagenes", "pdfaword"];
 // Cada herramienta tiene su propia dirección (…/unir-pdf/); las páginas las genera
 // generar.py y todas traen la app completa, así que cambiar de herramienta no recarga.
-const RUTAS = JSON.parse($("rutas").textContent);          // { "unir-pdf": { v: "unir", t: "título" }, "": {…} }
+const RUTAS = JSON.parse($("rutas").textContent);          // cada ruta trae vista, título de página y nombre de herramienta
 const PRINCIPAL = {};                                       // vista → su dirección principal
 for (const [ruta, r] of Object.entries(RUTAS)) if (!(r.v in PRINCIPAL)) PRINCIPAL[r.v] = ruta;
 function rutaDe(href) {
@@ -377,6 +376,10 @@ function rutaDe(href) {
   return u.slice(base.href.length).replace(/index\.html$/, "").replace(/\/$/, "");
 }
 const urlDe = (ruta) => new URL(ruta ? ruta + "/" : "./", base).href;
+function navegar(href) {
+  if (href !== location.href) history.pushState(null, "", href);
+  verVista();
+}
 function verVista() {
   // Enlaces viejos (…/#unir) → su dirección nueva
   const viejo = location.hash.slice(1);
@@ -384,10 +387,13 @@ function verVista() {
   const ruta = rutaDe(location.href);
   const r = RUTAS[ruta] || RUTAS[""];
   const nombre = VISTAS.includes(r.v) ? r.v : "inicio";
-  for (const v of VISTAS) $("vista-" + v).hidden = v !== nombre;
+  const compartido = ruta === "" && new URLSearchParams(location.search).get("compartido");
+  for (const v of VISTAS) $("vista-" + v).hidden = !!compartido || v !== nombre;
+  $("vista-compartido").hidden = !compartido;
+  if (compartido) mostrarCompartido(compartido);
   const ayuda = $("ayuda");
-  if (ayuda) ayuda.hidden = ayuda.dataset.ruta !== (ruta ?? "");
-  document.title = r.t;
+  if (ayuda) ayuda.hidden = !!compartido || ayuda.dataset.ruta !== (ruta ?? "");
+  document.title = compartido ? "Archivo compartido · Navaja PDF" : r.t;
   if (nombre === "office") iniciarOffice();
   scrollTo(0, 0);
 }
@@ -399,10 +405,8 @@ document.addEventListener("click", (e) => {
   const ruta = rutaDe(a.href);
   if (ruta === null || !(ruta in RUTAS)) return;
   e.preventDefault();
-  if (a.href !== location.href) history.pushState(null, "", a.href);
-  verVista();
+  navegar(a.href);
 });
-verVista();
 
 // ---- fotos HEIC (las del iPhone): casi ningún navegador las abre, así que en cuanto entran se
 // pasan a JPG con libheif (compilado para el navegador, LGPL-3.0; se baja la primera vez que se usa)
@@ -466,13 +470,15 @@ async function sinHeic(fs, avance = () => {}) {
   }
   return out;
 }
-function zonaDeArchivos(zona, entrada, alRecibir) {
+const entradasDeArchivos = new Map();
+function zonaDeArchivos(zona, entrada, alRecibir, convertirHeic = true) {
   const recibir = async (fs) => {
     const titulo = zona.querySelector("b"), antes = titulo && titulo.textContent;
-    try { fs = await sinHeic(fs, (t) => { if (titulo) titulo.textContent = t; }); }
+    try { if (convertirHeic) fs = await sinHeic(fs, (t) => { if (titulo) titulo.textContent = t; }); }
     finally { if (titulo) titulo.textContent = antes; }
-    alRecibir(fs);
+    return alRecibir(fs);
   };
+  entradasDeArchivos.set(zona.closest('[id^="vista-"]').id.slice(6), { recibir, multiple: entrada.multiple });
   zona.onclick = () => entrada.click();
   zona.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); entrada.click(); } };
   entrada.onchange = (e) => { recibir([...e.target.files]); e.target.value = ""; };
@@ -502,15 +508,124 @@ async function abrirPdf(f) {
     throw new Error(`«${f.name}» no se pudo leer como PDF.`);
   }
 }
-function filaDescarga(lista, bytes, nombre, detalle, tipo = "application/pdf") {
+const RUTAS_PDF = ["unir", "dividir", "organizar", "girar-pdf", "comprimir", "numeros", "marca",
+  "proteger", "desbloquear", "firmar", "editar", "ocr", "recortarpdf", "pdfaword", "aimagenes"];
+const RUTAS_IMG = ["imagenes", "comprimir-imagen", "cambiar-tamano", "convertir-imagen"];
+const MIME_OFFICE = /^application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)$/i;
+
+function rutasParaArchivo(f, compartido = false) {
+  if (esPdf(f)) return compartido ? [...RUTAS_PDF, "reparar", "formulario", "sacarimagenes"] : RUTAS_PDF;
+  if (pareceImagen(f)) {
+    if (!compartido) return RUTAS_IMG;
+    const otras = ["escanear", "recortar", "girar-imagen"];
+    if (esImagen(f) || esHeic(f)) otras.push("ocr");
+    return [...RUTAS_IMG, ...otras];
+  }
+  return compartido && (MIME_OFFICE.test(f.type) || /\.(docx|xlsx|pptx)$/i.test(f.name)) ? ["office"] : [];
+}
+
+function opcionesDeDestino(herramientas, cantidad) {
+  return herramientas.map((v) => {
+    const ruta = PRINCIPAL[v] ?? v;
+    const { v: vista, n } = RUTAS[ruta];
+    const entrada = entradasDeArchivos.get(vista);
+    return { ruta, nombre: n, entrada };
+  }).filter(({ entrada }) => entrada && (cantidad === 1 || entrada.multiple));
+}
+
+async function abrirCon(ruta, archivos) {
+  navegar(urlDe(ruta));
+  await entradasDeArchivos.get(RUTAS[ruta].v).recibir(archivos);
+}
+
+function accionesDeDescarga(li, blob, nombre, imagenes = []) {
+  const herramientas = imagenes.length ? RUTAS_IMG : rutasParaArchivo({ name: nombre, type: blob.type });
+  const acciones = document.createElement("div");
+  acciones.className = "acciones-descarga";
+  const a = document.createElement("a");
+  a.className = "bajar";
+  a.textContent = "Descargar";
+  a.href = URL.createObjectURL(blob);
+  a.download = nombre;
+  acciones.append(a);
+  const destinos = opcionesDeDestino(herramientas, imagenes.length || 1);
+  if (destinos.length) {
+    const menu = document.createElement("select");
+    menu.setAttribute("aria-label", `Seguir con el resultado «${nombre}»`);
+    menu.append(new Option("Seguir con…", ""));
+    for (const d of destinos) menu.append(new Option(d.nombre, d.ruta));
+    menu.onchange = () => {
+      const ruta = menu.value;
+      if (!ruta) return;
+      menu.value = "";
+      const archivos = imagenes.length
+        ? imagenes.map((h) => new File([h.bytes], h.nombre, { type: h.tipo }))
+        : [new File([blob], nombre, { type: blob.type })];
+      abrirCon(ruta, archivos);
+    };
+    acciones.append(menu);
+  }
+  li.classList.add("fila-descarga");
+  li.append(acciones);
+}
+
+function filaDescarga(lista, bytes, nombre, detalle, tipo = "application/pdf", imagenes = []) {
   const li = document.createElement("li");
-  li.innerHTML = `<div class="nombre"><div></div><small></small></div><a class="bajar">Descargar</a>`;
+  li.innerHTML = '<div class="nombre"><div></div><small></small></div>';
   li.querySelector(".nombre div").textContent = nombre;
   li.querySelector("small").textContent = `${detalle} · ${(bytes.length / 1024).toFixed(0)} KB`;
-  const a = li.querySelector("a");
-  a.href = URL.createObjectURL(new Blob([bytes], { type: tipo }));
-  a.download = nombre;
+  accionesDeDescarga(li, new Blob([bytes], { type: tipo }), nombre, imagenes);
   lista.prepend(li);
+}
+
+let compartidoActual = null;
+async function mostrarCompartido(id) {
+  if (compartidoActual?.id === id) return;
+  const actual = compartidoActual = { id };
+  const aviso = $("estadoCompartido"), contenido = $("archivosCompartidos");
+  aviso.textContent = "Abriendo los archivos compartidos…";
+  contenido.replaceChildren();
+  try {
+    if (!/^\d{13}-[a-f0-9-]{36}$/.test(id)) throw new Error();
+    const cache = await caches.open(CACHE_COMPARTIDO);
+    const clave = new URL(`compartir/${id}`, base);
+    const respuesta = await cache.match(clave);
+    if (!respuesta) throw new Error();
+    const archivos = (await respuesta.formData()).getAll("archivos").filter((f) => f instanceof File);
+    if (compartidoActual !== actual) return;
+    const grupos = archivos.map((f) => ({ archivos: [f], herramientas: rutasParaArchivo(f, true), titulo: f.name }));
+    if (archivos.length > 1) {
+      const comunes = grupos[0].herramientas.filter((v) => grupos.every((g) => g.herramientas.includes(v)));
+      grupos.unshift({ archivos, herramientas: comunes, titulo: `Los ${archivos.length} archivos` });
+    }
+    const pintarGrupo = (grupo, destinos) => {
+      const seccion = document.createElement("section");
+      const titulo = document.createElement("h3");
+      titulo.textContent = grupo.titulo;
+      const botones = document.createElement("div");
+      botones.className = "acciones";
+      for (const d of destinos) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "secundario";
+        b.textContent = d.nombre;
+        b.onclick = async () => {
+          await abrirCon(d.ruta, grupo.archivos);
+          await cache.delete(clave);
+        };
+        botones.append(b);
+      }
+      seccion.append(titulo, botones);
+      contenido.append(seccion);
+    };
+    for (const grupo of grupos) {
+      const destinos = opcionesDeDestino(grupo.herramientas, grupo.archivos.length);
+      if (destinos.length) pintarGrupo(grupo, destinos);
+    }
+    aviso.textContent = contenido.childElementCount ? "" : "No hay herramientas para este tipo de archivo.";
+  } catch {
+    if (compartidoActual === actual) aviso.textContent = "No se pudieron abrir los archivos. Compártelos de nuevo desde tu celular.";
+  }
 }
 const paginasTxt = (n) => n === 1 ? "1 página" : n + " páginas";
 
@@ -976,8 +1091,9 @@ $("botonAImg").onclick = async () => {
       const blob = await new Promise((ok) => lienzo.toBlob(ok, png ? "image/png" : "image/jpeg", 0.9));
       hechas.push({ nombre: `${nombre} - página ${String(i + 1).padStart(cifras, "0")}.${ext}`, bytes: new Uint8Array(await blob.arrayBuffer()), px: `${lienzo.width} × ${lienzo.height} px` });
     }
-    if (hechas.length <= 12) for (const h of [...hechas].reverse()) filaDescarga($("salidaAImg"), h.bytes, h.nombre, h.px, png ? "image/png" : "image/jpeg");
-    if (hechas.length > 1) filaDescarga($("salidaAImg"), zipSimple(hechas), `${nombre} (imágenes).zip`, `${hechas.length} imágenes ${ext.toUpperCase()}`, "application/zip");
+    const tipo = png ? "image/png" : "image/jpeg";
+    if (hechas.length <= 12) for (const h of [...hechas].reverse()) filaDescarga($("salidaAImg"), h.bytes, h.nombre, h.px, tipo);
+    if (hechas.length > 1) filaDescarga($("salidaAImg"), zipSimple(hechas), `${nombre} (imágenes).zip`, `${hechas.length} imágenes ${ext.toUpperCase()}`, "application/zip", hechas.map((h) => ({ ...h, tipo })));
     aviso("avisoAImg", hechas.length === 1 ? "Listo." : `Listo: ${hechas.length} imágenes${hechas.length > 12 ? ", juntas en un .zip" : ""}.`);
   } catch (e) {
     aviso("avisoAImg", String(e && e.message || e), true);
@@ -1497,6 +1613,22 @@ async function pdfDeImagenes(fs) {
   }
   return doc.save();
 }
+// Filtra el texto dudoso y conserva las cajas para la capa del PDF.
+function textoReconocido(data, minimo = 3) {
+  const letras = (w) => (w.text.match(/[\p{L}\p{N}]/gu) || []).length;
+  const palabras = [], parrafos = [];
+  for (const bl of data.blocks || []) for (const pa of bl.paragraphs) {
+    const renglones = [];
+    for (const li of pa.lines) {
+      const buenas = li.words.filter((w) => w.text.trim() && (w.confidence >= 75 || (w.confidence >= 50 && letras(w) >= 4)));
+      palabras.push(...buenas);
+      if (buenas.length) renglones.push(buenas.map((w) => w.text).join(" "));
+    }
+    if (renglones.length) parrafos.push(renglones.join("\n"));
+  }
+  const hay = palabras.filter((w) => letras(w) >= 3).length >= minimo;
+  return hay ? { texto: parrafos.join("\n\n"), palabras } : { texto: "", palabras: [] };
+}
 // Lee las páginas «cuales» → por cada una { texto, palabras, esc } (palabras = null si ya traía texto)
 async function leerPaginas(bytes, cuales, idioma, avance) {
   const pdfjs = await pdfJs();
@@ -1529,22 +1661,8 @@ async function leerPaginas(bytes, cuales, idioma, avance) {
           // Si traía texto roto, la hoja se cambiará por su imagen (así ya no se copia la basura)
           const foto = lleno.length > 30 ? new Uint8Array(await (await new Promise((ok) => lienzo.toBlob(ok, "image/jpeg", 0.8))).arrayBuffer()) : null;
           lienzo.width = lienzo.height = 0;
-          // Solo cuentan las palabras de las que el lector está seguro (en texto de verdad pasa de 90;
-          // en fotos y manchas «ve» letras sueltas con 0 a 80), y una hoja sin tres palabras
-          // de verdad se toma como hoja sin texto
-          const letras = (w) => (w.text.match(/[\p{L}\p{N}]/gu) || []).length;
-          const palabras = [], parrafos = [];
-          for (const bl of data.blocks || []) for (const pa of bl.paragraphs) {
-            const renglones = [];
-            for (const li of pa.lines) {
-              const buenas = li.words.filter((w) => w.text.trim() && (w.confidence >= 75 || (w.confidence >= 50 && letras(w) >= 4)));
-              palabras.push(...buenas);
-              if (buenas.length) renglones.push(buenas.map((w) => w.text).join(" "));
-            }
-            if (renglones.length) parrafos.push(renglones.join("\n"));
-          }
-          const hay = palabras.filter((w) => letras(w) >= 3).length >= 3;
-          paginas[k] = { texto: hay ? parrafos.join("\n\n") : "", palabras: hay ? palabras : [], esc, foto: hay ? foto : null };
+          const { texto, palabras } = textoReconocido(data);
+          paginas[k] = { texto, palabras, esc, foto: palabras.length ? foto : null };
         }
         pagina.cleanup();
         partes[n] = 0; hechas++; avisar();
@@ -1557,7 +1675,7 @@ async function leerPaginas(bytes, cuales, idioma, avance) {
   }
 }
 // Escribe las palabras, invisibles, en su lugar: cada una del ancho que ocupa en la hoja
-function capaDeTexto(L, doc, fuente, p, palabras, esc) {
+function capaDeTexto(L, doc, fuente, p, palabras, esc, escY = esc) {
   const c = p.getCropBox(), r = giroDe(p), [, H] = tamVisible(p);
   const t = r * Math.PI / 180, co = Math.round(Math.cos(t)), se = Math.round(Math.sin(t));
   const ops = [L.pushGraphicsState(), L.beginText(), L.setTextRenderingMode(L.TextRenderingMode.Invisible)];
@@ -1567,7 +1685,7 @@ function capaDeTexto(L, doc, fuente, p, palabras, esc) {
     const ancho = (w.bbox.x1 - w.bbox.x0) / esc;
     if (!texto || !(ancho > 0)) continue;
     const size = Math.min(300, Math.max(1, ancho / fuente.widthOfTextAtSize(texto, 1)));
-    const vx = w.bbox.x0 / esc, vy = H - (w.baseline && w.baseline.y0 > 0 ? Math.max(w.baseline.y0, w.baseline.y1) : w.bbox.y1) / esc;
+    const vx = w.bbox.x0 / esc, vy = H - (w.baseline && w.baseline.y0 > 0 ? Math.max(w.baseline.y0, w.baseline.y1) : w.bbox.y1) / escY;
     const [x, y] = r === 90 ? [c.x + c.width - vy, c.y + vx] : r === 180 ? [c.x + c.width - vx, c.y + c.height - vy]
       : r === 270 ? [c.x + vy, c.y + c.height - vx] : [c.x + vx, c.y + vy];
     clave ||= p.node.newFontDictionary("OCR", fuente.ref);
@@ -2830,7 +2948,11 @@ function listaImagenes(s, { girar = false, dato = (x) => `${pxTxt(x.w, x.h)} · 
       img.src = x.url;
       li.onclick = (e) => {
         const a = e.target.closest("button")?.dataset.a;
-        if (a === "izq" || a === "der") { x.giro = (x.giro + (a === "izq" ? 270 : 90)) % 360; aviso("aviso" + s, ""); }
+        if (a === "izq" || a === "der") {
+          x.giro = (x.giro + (a === "izq" ? 270 : 90)) % 360;
+          x.giroManual = true;
+          aviso("aviso" + s, "");
+        }
         else if (a === "quitar") { items.splice(items.indexOf(x), 1); li.remove(); URL.revokeObjectURL(x.url); }
         else return;
         yo.pintar();
@@ -2868,7 +2990,7 @@ async function procesarLista(s, lista, hacer, nombreZip, resumen = null) {
       } catch (e) { fallas.push(String(e && e.message || e)); }
     }
     if (hechas.length <= 12) for (const h of [...hechas].reverse()) filaDescarga(salida, h.bytes, h.nombre, h.detalle, h.tipo);
-    if (hechas.length > 1) filaDescarga(salida, zipSimple(hechas), nombreZip, `${hechas.length} imágenes`, "application/zip");
+    if (hechas.length > 1) filaDescarga(salida, zipSimple(hechas), nombreZip, `${hechas.length} imágenes`, "application/zip", hechas);
     const n = hechas.length;
     const bien = !n ? "" : resumen ? resumen(hechas) : n === 1 ? "Listo." : `Listo: ${n} imágenes${n > 12 ? ", juntas en un .zip" : ""}.`;
     aviso("aviso" + s, [bien, fallas.length ? `No se pudo con ${fallas.length === 1 ? "una" : fallas.length}: ${fallas.join(" ")}` : ""].filter(Boolean).join(" "), fallas.length > 0);
@@ -3280,7 +3402,7 @@ function filtroDocumento(px, w, h, modo) {
 // una copia de 500 px. Al crear el PDF se vuelve a abrir y se achica solo lo necesario para que la
 // hoja enderezada salga de ≤ 3300 px de lado (unos 300 ppp en carta, como Adobe Scan).
 const ESQ_TODA = [[0, 0], [1, 0], [1, 1], [0, 1]], ESQ_DEFECTO = [[0.06, 0.06], [0.94, 0.06], [0.94, 0.94], [0.06, 0.94]];
-let selES = null, buscandoES = false;
+let selES = null, buscandoES = false, generandoES = false;
 const listaES = listaImagenes("ES", {
   girar: true,
   dato: (x) => x.falla ? x.falla : !x.esq ? "Buscando la hoja…" : x.encontrada ? (x.giro ? `Hoja encontrada · girada ${LADOS[x.giro]}` : "Hoja encontrada") : "Acomoda las esquinas",
@@ -3290,6 +3412,7 @@ const listaES = listaImagenes("ES", {
     for (const x of listaES.items) x.li.classList.toggle("elegida", x === selES);
     $("editorES").hidden = !selES;
     $("opcionesES").hidden = !listaES.items.length;
+    if (generandoES) $("botonES").disabled = true;
     buscarHojas();
   },
 });
@@ -3364,46 +3487,169 @@ async function escanearFoto(x, modo) {
   filtroDocumento(out, ow, oh, modo);
   let c = lienzoNuevo(ow, oh);
   c.getContext("2d").putImageData(new ImageData(out, ow, oh), 0, 0);
-  if (x.giro) { const g = transformar(c, x.giro); c.width = 0; c = g; }
   return c;
 }
+// Limita el trabajo de orientación a muestras pequeñas y deja el OCR final en el worker.
+function muestraEscaneo(c, lado) {
+  const k = Math.min(1, lado / Math.max(c.width, c.height));
+  return escalar(c, Math.max(1, Math.round(c.width * k)), Math.max(1, Math.round(c.height * k)));
+}
+
+function inclinacionDeTexto(c) {
+  const chico = muestraEscaneo(c, 420), W = chico.width, H = chico.height;
+  const { data } = chico.getContext("2d").getImageData(0, 0, W, H);
+  if (chico !== c) chico.width = chico.height = 0;
+  const gris = (i) => (data[i] + data[i + 1] + data[i + 2]) / 3;
+  const xs = [], ys = [];
+  // Usa los bordes horizontales de la tinta y omite el marco de la foto.
+  for (let y = Math.max(1, Math.ceil(H * 0.06)); y < H * 0.94; y++) {
+    for (let x = Math.ceil(W * 0.06); x < W * 0.94; x++) {
+      const i = (y * W + x) * 4;
+      if (gris(i - W * 4) - gris(i) > 38) { xs.push(x - W / 2); ys.push(y + W); }
+    }
+  }
+  if (xs.length < 60) return 0;
+  const filas = new Uint32Array(H + 2 * W + 2);
+  const fuerza = (angulo) => {
+    filas.fill(0);
+    const pendiente = Math.tan(angulo * Math.PI / 180);
+    for (let i = 0; i < xs.length; i++) filas[Math.round(ys[i] - pendiente * xs[i])]++;
+    let suma = 0;
+    for (const n of filas) suma += n * n;
+    return suma;
+  };
+  const recto = fuerza(0);
+  let angulo = 0, mejor = recto;
+  for (let a = -15; a <= 15; a++) {
+    if (a === 0) continue;
+    const valor = fuerza(a);
+    if (valor > mejor) { mejor = valor; angulo = a; }
+  }
+  return mejor > recto * 1.08 ? -angulo : 0;
+}
+
+function girarEscaneo(c, grados) {
+  if (!grados) return c;
+  if (grados % 90 === 0) return transformar(c, grados);
+  // Amplía el lienzo para conservar las esquinas y rellena el fondo de blanco.
+  const t = grados * Math.PI / 180, co = Math.abs(Math.cos(t)), se = Math.abs(Math.sin(t));
+  const out = lienzoNuevo(Math.ceil(c.width * co + c.height * se), Math.ceil(c.height * co + c.width * se));
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.translate(out.width / 2, out.height / 2);
+  ctx.rotate(t);
+  ctx.drawImage(c, -c.width / 2, -c.height / 2);
+  return out;
+}
+
+async function giroDelEscaneo(c, lector, avance) {
+  const muestra = muestraEscaneo(c, 950), lateral = transformar(muestra, 90);
+  const inclinaciones = [inclinacionDeTexto(muestra), inclinacionDeTexto(lateral)];
+  lateral.width = lateral.height = 0;
+  let mejor = 0, elegido = 0;
+  try {
+    for (let n = 0; n < 4; n++) {
+      avance(n);
+      const giro = n * 90 + inclinaciones[n % 2], prueba = girarEscaneo(muestra, giro);
+      try {
+        const { data } = await lector.recognize(prueba, {}, { blocks: true });
+        const palabras = textoReconocido(data).palabras.filter((w) => /\p{L}{3}/u.test(w.text));
+        // Pide varias palabras plausibles para evitar giros por letras sueltas o manchas.
+        const puntuacion = palabras.slice(0, 12).reduce((s, w) => s + w.confidence - 45, 0);
+        if (puntuacion > mejor) { mejor = puntuacion; elegido = n; }
+      } finally {
+        if (prueba !== muestra) prueba.width = prueba.height = 0;
+      }
+    }
+    return elegido * 90 + inclinaciones[elegido % 2];
+  } finally {
+    if (muestra !== c) muestra.width = muestra.height = 0;
+  }
+}
+
 $("botonES").onclick = async () => {
+  if (generandoES) return;
   const fotos = listaES.items.filter((x) => !x.mala && !x.falla);
   if (fotos.some((x) => !x.esq)) { aviso("avisoES", "Espera a que termine de buscar las hojas.", true); return; }
   if (!fotos.length) return;
+  generandoES = true;
   $("botonES").disabled = true;
   $("salidaES").textContent = "";
+  const modo = $("filtroES").value, hoja = $("hojaES").value;
+  const automatico = $("autoES").checked, buscable = $("ocrES").checked;
+  let lector, progreso = () => {}, sinOrientar = false, leidas = 0, c;
   try {
-    const { PDFDocument } = await pdfLib();
-    const doc = await PDFDocument.create(), modo = $("filtroES").value, hoja = $("hojaES").value;
+    if (buscable || (automatico && fotos.some((x) => !x.giroManual))) {
+      aviso("avisoES", "Preparando el lector de texto (la primera vez baja unos 9 MB)…");
+      try {
+        lector = await lectorOcr("spa+eng", (parte) => progreso(parte));
+      } catch (e) {
+        if (buscable) throw e;
+        sinOrientar = true;
+      }
+    }
+    const L = await pdfLib(), doc = await L.PDFDocument.create();
+    const fuente = buscable ? await doc.embedFont(L.StandardFonts.Helvetica) : null;
     for (const [k, x] of fotos.entries()) {
-      aviso("avisoES", fotos.length > 1 ? `Hoja ${k + 1} de ${fotos.length}…` : "Trabajando…");
+      const paso = `Hoja ${k + 1} de ${fotos.length}`;
+      aviso("avisoES", `${paso} · preparando imagen…`);
       await pintar();
-      const c = await escanearFoto(x, modo), horiz = c.width > c.height;
+      c = await escanearFoto(x, modo);
+      let giro = x.giro;
+      if (automatico && !x.giroManual) {
+        if (lector) {
+          giro = await giroDelEscaneo(c, lector, (n) => {
+            progreso = (p) => aviso("avisoES", `${paso} · buscando orientación… ${Math.floor((n + p) * 25)} %`);
+            progreso(0);
+          });
+        } else giro = inclinacionDeTexto(c);
+      }
+      if (giro) {
+        const rotado = girarEscaneo(c, giro);
+        c.width = c.height = 0;
+        c = rotado;
+      }
+      const horiz = c.width > c.height;
       const img = await doc.embedJpg(await guardarImagen(c, "jpg", 0.8));
       let pw, ph;
       if (hoja === "documento") [pw, ph] = horiz ? [612 * c.width / c.height, 612] : [612, 612 * c.height / c.width];
       else { [pw, ph] = HOJAS[hoja]; if (horiz) [pw, ph] = [ph, pw]; }
-      c.width = 0;
-      doc.addPage([pw, ph]).drawImage(img, { x: 0, y: 0, width: pw, height: ph });
+      const pagina = doc.addPage([pw, ph]);
+      pagina.drawImage(img, { x: 0, y: 0, width: pw, height: ph });
+      if (buscable) {
+        progreso = (p) => aviso("avisoES", `${paso} · reconociendo texto… ${Math.floor(p * 100)} %`);
+        progreso(0);
+        const muestra = muestraEscaneo(c, 2500);
+        try {
+          const { data } = await lector.recognize(muestra, {}, { blocks: true });
+          const { palabras } = textoReconocido(data, 1);
+          leidas += capaDeTexto(L, doc, fuente, pagina, palabras, muestra.width / pw, muestra.height / ph);
+        } finally {
+          if (muestra !== c) muestra.width = muestra.height = 0;
+        }
+      }
+      c.width = c.height = 0;
     }
+    aviso("avisoES", "Armando el PDF…");
     filaDescarga($("salidaES"), await doc.save(), `${sinExtImg(fotos[0].f.name)} (escaneado).pdf`, paginasTxt(fotos.length));
-    aviso("avisoES", "Listo. Si quieres que se pueda buscar el texto, pásalo después por «Reconocer texto».");
+    const notas = ["Listo."];
+    if (buscable) notas.push(leidas ? `Texto reconocido en ${paginasTxt(leidas)} de ${fotos.length}.` : "No se encontró texto que se pudiera reconocer.");
+    if (sinOrientar) notas.push("No se pudo cargar el lector para detectar la orientación. Puedes girar las fotos a mano y volver a crear el PDF.");
+    aviso("avisoES", notas.join(" "));
     $("salidaES").scrollIntoView({ block: "nearest", behavior: "smooth" });
   } catch (e) {
     aviso("avisoES", String(e && e.message || e), true);
   } finally {
-    $("botonES").disabled = false;
+    if (lector) lector.terminate().catch(() => {});
+    if (c) c.width = c.height = 0;
+    generandoES = false;
+    $("botonES").disabled = !listaES.items.some((x) => !x.mala && !x.falla);
   }
 };
 
 $("botonPreparar").onclick = () => preparar().catch(() => {});
-$("zona").onclick = () => $("archivos").click();
-$("zona").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("archivos").click(); } };
-$("archivos").onchange = (e) => { agregar([...e.target.files]); e.target.value = ""; };
-for (const ev of ["dragenter", "dragover"]) $("zona").addEventListener(ev, (e) => { e.preventDefault(); $("zona").classList.add("encima"); });
-for (const ev of ["dragleave", "drop"]) $("zona").addEventListener(ev, (e) => { e.preventDefault(); $("zona").classList.remove("encima"); });
-$("zona").addEventListener("drop", (e) => agregar([...e.dataTransfer.files]));
+zonaDeArchivos($("zona"), $("archivos"), agregar, false);
 
 // ---------------------------------------------------------------- 19. recortar PDF
 // Recortar es cambiar el recuadro visible de cada página (CropBox y MediaBox): el contenido no se
@@ -4073,7 +4319,7 @@ $("botonSI").onclick = async () => {
     if (noSe) notas.push(`${noSe === 1 ? "1 imagen está" : noSe + " imágenes están"} en un formato que aquí no se sabe leer (típico de escaneos en blanco y negro); para esas usa «PDF a imágenes».`);
     if (!hechas.length) throw new Error((lista.length ? "No se pudo sacar ninguna imagen. " : "Ese PDF (o esas páginas) no trae imágenes. ") + notas.join(" "));
     if (hechas.length <= 12) for (const h of [...hechas].reverse()) filaDescarga($("salidaSI"), h.bytes, h.nombre, h.px, h.tipo);
-    if (hechas.length > 1) filaDescarga($("salidaSI"), zipSimple(hechas), `${nombre} (imágenes sacadas).zip`, `${hechas.length} imágenes`, "application/zip");
+    if (hechas.length > 1) filaDescarga($("salidaSI"), zipSimple(hechas), `${nombre} (imágenes sacadas).zip`, `${hechas.length} imágenes`, "application/zip", hechas);
     aviso("avisoSI", `Listo: ${hechas.length === 1 ? "1 imagen" : hechas.length + " imágenes"}${hechas.length > 12 ? ", juntas en un .zip" : ""}. ` + notas.join(" "));
   } catch (e) {
     aviso("avisoSI", String(e && e.message || e), true);
@@ -4357,3 +4603,5 @@ $("botonPW").onclick = async () => {
     $("botonPW").disabled = false;
   }
 };
+
+verVista();

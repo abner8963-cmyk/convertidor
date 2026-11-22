@@ -3,6 +3,15 @@
   <h1><a class="marca" href="./"><img src="icono.svg" alt="">{{NOMBRE}}</a></h1>
   <p class="sub">Herramientas de PDF e imágenes. Todo pasa en tu navegador: tus archivos no se suben a ningún lado.</p>
 
+  <div id="vista-compartido" hidden>
+    <p class="volver"><a href="./">← Todas las herramientas</a></p>
+    <h2>¿Qué quieres hacer con este archivo?</h2>
+    <div class="tarjeta">
+      <p class="aviso" id="estadoCompartido" aria-live="polite"></p>
+      <div id="archivosCompartidos"></div>
+    </div>
+  </div>
+
   <div id="vista-inicio">
     <h2 class="grupo">PDF</h2>
     <ul class="portada">
@@ -213,6 +222,10 @@
               <option value="a4">A4</option>
             </select>
           </label>
+        </div>
+        <div class="acciones">
+          <label><input type="checkbox" id="autoES" checked> Girar y enderezar automáticamente</label>
+          <label><input type="checkbox" id="ocrES"> Hacer buscable (OCR)</label>
         </div>
         <div class="acciones">
           <button id="botonES" disabled>Crear PDF</button>

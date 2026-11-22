@@ -158,7 +158,7 @@ PAGINAS = [
      "Convierte fotos de hojas en un PDF que parece escaneado: encuentra la hoja, la endereza y deja el papel blanco. Gratis y sin subir tus fotos.",
      ["Toma o elige las fotos de tus hojas.",
       "Revisa las cuatro esquinas que encontró en cada foto y ajústalas si hace falta.",
-      "Elige color, gris o blanco y negro y descarga el PDF."],
+      "Elige color, gris o blanco y negro. Activa «Hacer buscable (OCR)» si quieres buscar o copiar el texto y crea el PDF."],
      [("¿Sirve desde el celular?",
        "Sí. Toma la foto con la hoja completa a la vista y sobre un fondo más oscuro que el papel.")]),
     ("comprimir-pdf", "comprimir", "Comprimir PDF",
@@ -326,7 +326,7 @@ def ayuda(p):
 def main():
     cuerpo = (RAIZ / "fuente/cuerpo.html").read_text(encoding="utf-8")
     todas = [INICIO] + PAGINAS
-    rutas = {p[0]: {"v": p[1], "t": titulo(p)} for p in todas}
+    rutas = {p[0]: {"v": p[1], "t": titulo(p), "n": p[2]} for p in todas}
     principal = {}
     for p in PAGINAS:
         principal.setdefault(p[1], p[0])

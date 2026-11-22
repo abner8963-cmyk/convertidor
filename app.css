@@ -151,3 +151,12 @@
   .hoja-form select.campo-pdf { padding: 0; }
   .hoja-form .campo-pdf:disabled { background: transparent; outline: 0; }
   .objeto.borrar { background: #000; }
+
+  .acciones-descarga { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .acciones-descarga select { max-width: 10em; padding: 8px; border: 1px solid var(--borde); border-radius: 10px; font: inherit; color: var(--acento); background: var(--acento-claro); }
+  #archivosCompartidos h3 { overflow-wrap: anywhere; }
+  #archivosCompartidos section + section { border-top: 1px solid var(--borde); margin-top: 16px; }
+  @media (max-width: 600px) {
+    #lista li.fila-descarga, ul.filas li.fila-descarga { flex-wrap: wrap; }
+    .fila-descarga .nombre { flex-basis: 100%; }
+  }

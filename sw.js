@@ -7,11 +7,12 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "24";
+const VERSION = "25";
+const CACHE_COMPARTIDO = "convertidor-compartido";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice
 const CACHE_OCR = "convertidor-ocr-7.0.0";        // cambia solo si cambia Tesseract o sus idiomas
-const APP = ["./", "index.html", "app.js", "app.css", "manifest.webmanifest", "icono.svg", "partes.json",
+const APP = ["./", "index.html", "app.js", "app.css", "manifest.webmanifest", "icono.svg", "icono-192.png", "icono-512.png", "partes.json",
              "lib/pdf-lib.min.js", "lib/pdf.min.mjs", "lib/pdf.worker.min.mjs", "lib/qpdf.js", "lib/qpdf.wasm", "lo/soffice.js", "lo/soffice.worker.js", "lo/browser.js", "lo/browser.worker.global.js"];
 
 self.addEventListener("install", (e) => {
@@ -21,7 +22,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
     for (const nombre of await caches.keys()) {
-      if (nombre !== CACHE_APP && nombre !== CACHE_LO && nombre !== CACHE_OCR) await caches.delete(nombre);
+      if (nombre !== CACHE_APP && nombre !== CACHE_LO && nombre !== CACHE_OCR && nombre !== CACHE_COMPARTIDO) await caches.delete(nombre);
     }
     await self.clients.claim();
   })());
@@ -101,7 +102,7 @@ async function deLaApp(peticion) {
   // Primero la red (para recibir las actualizaciones), pero sin esperarla más de 3 s si ya
   // hay copia guardada: en redes que no llegan a GitHub Pages (algunas de datos móviles)
   // la conexión se queda colgada en vez de fallar, y la app tardaría en abrir.
-  const guardada = caches.match(peticion, { ignoreSearch: true })
+  const guardada = caches.open(CACHE_APP).then((c) => c.match(peticion, { ignoreSearch: true }))
     .then((r) => r || (peticion.mode === "navigate" ? paginaDeRespaldo(peticion) : null));
   const red = fetch(peticion).then((resp) => {
     if (resp.ok && peticion.method === "GET") {
@@ -125,9 +126,32 @@ async function deLaApp(peticion) {
   }
 }
 
+async function recibirCompartido(peticion) {
+  const destino = new URL("./", self.registration.scope);
+  try {
+    const datos = await peticion.formData();
+    const archivos = datos.getAll("archivos").filter((f) => f instanceof File && f.name && f.size);
+    if (!archivos.length) throw new Error("No llegaron archivos");
+    const cache = await caches.open(CACHE_COMPARTIDO), ahora = Date.now();
+    const vencidas = (await cache.keys()).filter((r) => Number(r.url.split("/").pop().split("-")[0]) < ahora - 86400000);
+    await Promise.all(vencidas.map((r) => cache.delete(r)));
+    const id = `${ahora}-${crypto.randomUUID()}`;
+    const guardados = new FormData();
+    for (const f of archivos) guardados.append("archivos", f);
+    await cache.put(new URL(`compartir/${id}`, destino), new Response(guardados));
+    destino.searchParams.set("compartido", id);
+  } catch {
+    destino.searchParams.set("compartido", "error");
+  }
+  return Response.redirect(destino, 303);
+}
+
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
+  if (e.request.method === "POST" && url.pathname === new URL("compartir/", self.registration.scope).pathname) {
+    return e.respondWith(recibirCompartido(e.request));
+  }
   if (url.pathname.endsWith("/lo/soffice.wasm")) return e.respondWith(deLibreOffice(e.request, "soffice.wasm"));
   if (url.pathname.endsWith("/lo/soffice.data")) return e.respondWith(deLibreOffice(e.request, "soffice.data"));
   if (url.pathname.includes("/ocr/")) return e.respondWith(delOcr(e.request));
