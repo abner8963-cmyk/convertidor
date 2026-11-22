@@ -176,3 +176,31 @@
 .fase4-previas img { display:block; max-width:100%; max-height:420px; object-fit:contain;
   background:repeating-conic-gradient(#ddd 0% 25%,#fff 0% 50%) 0 0 / 16px 16px; }
 .fase4-caras { touch-action:none; cursor:crosshair; }
+
+.etiqueta-nube {
+  display: inline-block;
+  font-size: .75rem;
+  font-weight: 600;
+  padding: .15rem .5rem;
+  border: 1px solid currentColor;
+  border-radius: .6rem;
+  vertical-align: middle;
+}
+#dialogoNube {
+  max-width: min(32rem, calc(100% - 2rem));
+  border: 0;
+  border-radius: 12px;
+  padding: 1.4rem;
+  color: inherit;
+  background: Canvas;
+}
+#dialogoNube::backdrop { background: #0009; }
+.mensaje-nube { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.campo textarea, .campo input[type="url"], #enlacesSolicitud input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: .4rem 0;
+  font: inherit;
+}
+progress[id^="avance"] { width: 100%; margin-top: .8rem; }

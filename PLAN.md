@@ -31,11 +31,11 @@ Ya hecho: 24 herramientas, una página por herramienta para Google (generar.py),
 20. Marca de agua en imágenes ✅
 21. Difuminar caras ✅
 
-## Fase 5 — Con servidor ☁ (etiqueta + aviso antes de usar)
-22. HTML a PDF (Cloudflare Browser Rendering)
-23. Pedir firmas a otros (cifrado en el dispositivo, clave en el #, borrado a 7 días)
-24. Traducir PDF · 25. Resumir con IA (IA integrada de Chrome; si no, Gemini con aviso)
-26. Contra abuso: Turnstile + límites por persona
+## Fase 5 — Con servidor ☁ ✅
+22. HTML a PDF desde URL o archivo (Cloudflare Browser Rendering)
+23. Pedir firmas a otros (editor compartido con Firmar PDF, cifrado en el dispositivo, clave en el #, borrado a 7 días)
+24. Traducir PDF a Word y texto · 25. Resumir PDF a Markdown (IA integrada de Chrome o Cloudflare Workers AI con aviso)
+26. Contra abuso con Turnstile, pase de una hora, límites por IP y topes diarios sin escrituras de KV
 
 ## Fase 6 — Lanzamiento
 27. Ícono con navaja (PNG 192/512 para Play Store) · 28. Página de privacidad y contacto

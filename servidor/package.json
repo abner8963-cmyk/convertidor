@@ -1,0 +1,7 @@
+{
+  "name": "navaja-api",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "dependencies": { "@cloudflare/puppeteer": "2.0.0", "ipaddr.js": "2.2.0" }
+}

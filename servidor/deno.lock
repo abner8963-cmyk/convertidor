@@ -1,0 +1,65 @@
+{
+  "version": "5",
+  "specifiers": {
+    "npm:@cloudflare/puppeteer@2.0.0": "2.0.0",
+    "npm:ipaddr.js@2.2.0": "2.2.0"
+  },
+  "npm": {
+    "@cloudflare/puppeteer@2.0.0": {
+      "integrity": "sha512-KwcwGQiRUUJakHkXg4r/e3AxCwcg3Ic0x49bqZLShR5hh3VBrNUYzTsG3T6ZRaNQbumOQE1ZsVBj4FIGLocmIQ==",
+      "dependencies": [
+        "@types/node",
+        "devtools-protocol",
+        "mitt",
+        "parsel-js",
+        "rxjs",
+        "typed-query-selector",
+        "urlpattern-polyfill"
+      ]
+    },
+    "@types/node@18.19.130": {
+      "integrity": "sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==",
+      "dependencies": [
+        "undici-types"
+      ]
+    },
+    "devtools-protocol@0.0.1666840": {
+      "integrity": "sha512-gCcO42XCHKEs7Ag0S7aGYsnJ7hlgrO3qderYqeiY0Eqk+0GFfuvT13IA0hHreJTa2KCdDVyGMeOhdMNmrrTjVg=="
+    },
+    "ipaddr.js@2.2.0": {
+      "integrity": "sha512-Ag3wB2o37wslZS19hZqorUnrnzSkpOVy+IiiDEiTqNubEYpYuHWIf6K4psgN2ZWKExS4xhVCrRVfb/wfW8fWJA=="
+    },
+    "mitt@3.0.1": {
+      "integrity": "sha512-vKivATfr97l2/QBCYAkXYDbrIWPM2IIKEl7YPhjCvKlG3kE2gm+uBo6nEXK3M5/Ffh/FLpKExzOQ3JJoJGFKBw=="
+    },
+    "parsel-js@1.2.2": {
+      "integrity": "sha512-AVJMlwQ4bL2Y0VvYJGk+Fp7eX4SCH2uFoNApmn4yKWACUewZ+alwW3tyoe1r5Z3aLYQTuAuPZIyGghMfO/Tlxw=="
+    },
+    "rxjs@7.8.2": {
+      "integrity": "sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==",
+      "dependencies": [
+        "tslib"
+      ]
+    },
+    "tslib@2.9.1": {
+      "integrity": "sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA=="
+    },
+    "typed-query-selector@2.12.4": {
+      "integrity": "sha512-lF6/OY655DSWZeuNovde8TZhju6QyC0Xtav57b07oZQ1EQvfSowA3+WfLEhvFJOc9sVfAtW5hie1lGIppOqbpQ=="
+    },
+    "undici-types@5.26.5": {
+      "integrity": "sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA=="
+    },
+    "urlpattern-polyfill@10.1.0": {
+      "integrity": "sha512-IGjKp/o0NL3Bso1PymYURCJxMPNAf/ILOpendP9f5B6e1rTJgdgiOvgfoT8VxCAdY+Wisb9uhGaJJf3yZ2V9nw=="
+    }
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@cloudflare/puppeteer@2.0.0",
+        "npm:ipaddr.js@2.2.0"
+      ]
+    }
+  }
+}

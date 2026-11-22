@@ -7,7 +7,7 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "27";
+const VERSION = "28";
 const CACHE_COMPARTIDO = "convertidor-compartido";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice
@@ -18,6 +18,7 @@ const CACHE_OCR = "convertidor-ocr-7.0.0";        // cambia solo si cambia Tesse
 const APP = ["./", "index.html", "app.js", "app.css", "manifest.webmanifest", "icono.svg", "icono-192.png", "icono-512.png", "partes.json",
              "comparar-pdf/", "pdf-a-markdown/", "pdf-a-powerpoint/", "pdf-a-excel/", "marca-de-agua-imagen/",
              "pdf-a-pdfa/", "quitar-fondo/", "mejorar-foto/", "difuminar-caras/",
+             "html-a-pdf/", "pedir-firmas-pdf/", "traducir-pdf/", "resumir-pdf/",
              "lib/fase4/worker.js", "lib/pdf-lib.min.js", "lib/pdf.min.mjs", "lib/pdf.worker.min.mjs", "lib/qpdf.js", "lib/qpdf.wasm", "lo/soffice.js", "lo/soffice.worker.js", "lo/browser.js", "lo/browser.worker.global.js"];
 
 self.addEventListener("install", (e) => {
@@ -111,7 +112,9 @@ async function deLaApp(peticion) {
   const red = fetch(peticion).then((resp) => {
     if (resp.ok && peticion.method === "GET") {
       const copia = resp.clone();
-      caches.open(CACHE_APP).then((c) => c.put(peticion, copia));
+      const url = new URL(peticion.url);
+      if (peticion.mode === "navigate" && /\/pedir-firmas-pdf\/(?:index\.html)?$/.test(url.pathname)) url.search = "";
+      caches.open(CACHE_APP).then((c) => c.put(url.href, copia));
     }
     return resp;
   });
@@ -152,7 +155,7 @@ async function recibirCompartido(peticion) {
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
   if (e.request.method === "POST" && url.pathname === new URL("compartir/", self.registration.scope).pathname) {
     return e.respondWith(recibirCompartido(e.request));
   }

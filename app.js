@@ -393,6 +393,7 @@ function verVista() {
   if (ayuda) ayuda.hidden = !!compartido || ayuda.dataset.ruta !== (ruta ?? "");
   document.title = compartido ? "Archivo compartido · Navaja PDF" : r.t;
   if (nombre === "office") iniciarOffice();
+  vistaSolicitud(nombre === "pedir-firmas-pdf");
   scrollTo(0, 0);
 }
 addEventListener("popstate", verVista);
@@ -510,7 +511,7 @@ async function abrirPdf(f) {
   }
 }
 const RUTAS_PDF = ["unir", "dividir", "organizar", "girar-pdf", "comprimir", "numeros", "marca",
-  "proteger", "desbloquear", "firmar", "editar", "ocr", "recortarpdf", "pdfaword", "aimagenes", "compararpdf", "pdfamarkdown", "pdfapowerpoint", "pdfaexcel", "pdfa"];
+  "proteger", "desbloquear", "firmar", "editar", "ocr", "recortarpdf", "pdfaword", "aimagenes", "compararpdf", "pdfamarkdown", "pdfapowerpoint", "pdfaexcel", "pdfa", "pedir-firmas-pdf", "traducir-pdf", "resumir-pdf"];
 const RUTAS_IMG = ["imagenes", "comprimir-imagen", "cambiar-tamano", "convertir-imagen", "marcaimagen",
   "quitar-fondo", "mejorar-foto", "difuminar-caras"];
 const MIME_OFFICE = /^application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)$/i;
@@ -2213,27 +2214,32 @@ async function pintarMesa() {
   pintarPuestas();
 }
 
-zonaDeArchivos($("zonaFirma"), $("archivoFirma"), async (fs) => {
-  const f = fs.find(esPdf);
+async function cargarEditorFirma(f, solicitud = null) {
   if (!f) { $("infoFirma").textContent = "Ese archivo no es un PDF."; return; }
   $("infoFirma").textContent = "Abriendo…";
   try {
     const doc = await abrirPdf(f), pdfjs = await pdfJs();
     const vista = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
+    if (solicitud && solicitud !== solicitudActual) { await vista.destroy(); return false; }
     if (paraFirmar) paraFirmar.vista.destroy();
-    paraFirmar = { f, vista, total: doc.getPageCount(), i: 0 };
+    paraFirmar = { f, vista, total: doc.getPageCount(), i: 0, solicitud };
     puestas.length = 0;
     $("infoFirma").textContent = `${f.name} · ${paginasTxt(paraFirmar.total)}`;
     $("repetirFirma").hidden = paraFirmar.total === 1;
     $("opcionesFirma").hidden = false;
     aviso("avisoFirma", "");
     await pintarMesa();
+    return true;
   } catch (e) {
+    if (solicitud && solicitud !== solicitudActual) return false;
     paraFirmar = null;
     $("opcionesFirma").hidden = true;
     $("infoFirma").textContent = String(e && e.message || e);
+    if (solicitud) throw e;
+    return false;
   }
-});
+}
+zonaDeArchivos($("zonaFirma"), $("archivoFirma"), (fs) => cargarEditorFirma(fs.find(esPdf)));
 $("antesFirma").onclick = () => { if (paraFirmar && paraFirmar.i > 0) { paraFirmar.i--; pintarMesa(); } };
 $("despuesFirma").onclick = () => { if (paraFirmar && paraFirmar.i < paraFirmar.total - 1) { paraFirmar.i++; pintarMesa(); } };
 lienzoMesa.onclick = (e) => {
@@ -2354,13 +2360,19 @@ $("botonFirma").onclick = async () => {
       p.drawImage(imagen, { ...colocar(L, p, x + ancho / 2, H - y - alto / 2, ancho, alto, 0), width: ancho, height: alto });
     }
     const bytes = await doc.save();
-    filaDescarga($("salidaFirma"), bytes, sinExt(a.f.name) + " (firmado).pdf", `Firma en ${paginasTxt(envueltas.size)}`);
+    if (a.solicitud) {
+      await enviarFirma(a.solicitud, bytes, sinExt(a.f.name) + " (firmado).pdf");
+    } else {
+      filaDescarga($("salidaFirma"), bytes, sinExt(a.f.name) + " (firmado).pdf", `Firma en ${paginasTxt(envueltas.size)}`);
+    }
     try {
       if ($("recordarFirma").checked) localStorage.setItem("firmaGuardada", JSON.stringify(f));
       else localStorage.removeItem("firmaGuardada");
     } catch { /* sin espacio o sin permiso: la firma solo no se guarda */ }
-    aviso("avisoFirma", "Listo. Descarga el PDF firmado aquí abajo.");
-    $("salidaFirma").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (!a.solicitud) {
+      aviso("avisoFirma", "Listo. Descarga el PDF firmado aquí abajo.");
+      $("salidaFirma").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
   } catch (e) {
     aviso("avisoFirma", String(e && e.message || e), true);
   } finally {
@@ -4572,6 +4584,13 @@ function docxDe(paginas, saltos) {
     ...media.map((m) => ({ nombre: "word/media/" + m.nombre, bytes: m.bytes })),
   ]);
 }
+function quitarPiesWord(paginas) {
+  // Encabezados y pies de página (lo que se repite arriba o abajo, y los números de página): fuera
+  const veces = new Map();
+  for (const pg of paginas) for (const m of new Set(pg.bloques.map((b) => b.margen).filter(Boolean))) veces.set(m, (veces.get(m) || 0) + 1);
+  const esPie = (m) => m && ((veces.get(m) >= 2 && paginas.length >= 2) || /^(p[aá]g(ina|\.)?\s*)?#(\s*(de|\/|of)\s*#)?$|^[-–—]\s*#\s*[-–—]$/.test(m));
+  for (const pg of paginas) pg.bloques = pg.bloques.filter((b) => !esPie(b.margen));
+}
 $("botonPW").onclick = async () => {
   const a = paraWord;
   if (!a) return;
@@ -4587,11 +4606,7 @@ $("botonPW").onclick = async () => {
       if (pg.sinTexto) escaneadas++;
       paginas.push(pg);
     }
-    // Encabezados y pies de página (lo que se repite arriba o abajo, y los números de página): fuera
-    const veces = new Map();
-    for (const pg of paginas) for (const m of new Set(pg.bloques.map((b) => b.margen).filter(Boolean))) veces.set(m, (veces.get(m) || 0) + 1);
-    const esPie = (m) => m && ((veces.get(m) >= 2 && paginas.length >= 2) || /^(p[aá]g(ina|\.)?\s*)?#(\s*(de|\/|of)\s*#)?$|^[-–—]\s*#\s*[-–—]$/.test(m));
-    for (const pg of paginas) pg.bloques = pg.bloques.filter((b) => !esPie(b.margen));
+    quitarPiesWord(paginas);
     if (escaneadas === paginas.length && !paginas.some((p) => p.bloques.length))
       throw new Error("Este PDF no tiene texto (parece escaneado). Pásalo primero por «Reconocer texto» y luego conviértelo.");
     aviso("avisoPW", "Armando el documento de Word…");
@@ -5804,4 +5819,745 @@ $("guardarDC").onclick = () => {
   }, archivos);
 };
 
-verVista();
+
+// ---------------------------------------------------------------- Herramientas con servidor
+const API = ["localhost", "127.0.0.1"].includes(location.hostname)
+  ? "http://127.0.0.1:8787" : "https://navaja-api.abner8963.workers.dev";
+
+const privacidadNube = {
+  "html-a-pdf": "Se envían la dirección o el contenido de tu archivo HTML y las opciones a Cloudflare Browser Rendering. Si pegas una dirección, Cloudflare consulta esa página pública. Navaja PDF no guarda la entrada ni el PDF después de la conversión.",
+  "pedir-firmas-pdf": "En Cloudflare se guardan el PDF, su nombre y el mensaje cifrados durante un máximo de 7 días. La clave solo va en el enlace. Puedes borrar la solicitud antes.",
+  "traducir-pdf": "Se envían a Cloudflare Workers AI el texto extraído del PDF y los idiomas para traducirlo. Navaja PDF no guarda el texto después de procesarlo.",
+  "resumir-pdf": "Se envían a Cloudflare Workers AI el texto extraído del PDF, el idioma y la extensión del resumen. Navaja PDF no guarda el texto después de procesarlo.",
+};
+const aceptadasNube = new Set();
+const dialogoNube = $("dialogoNube");
+let turnoDialogoNube = Promise.resolve();
+
+function preguntarNube(titulo, texto, continuar = "Entendido, continuar", alContinuar, signal) {
+  const tarea = turnoDialogoNube.then(() => new Promise((resolver) => {
+    if (signal?.aborted) { resolver(false); return; }
+    $("tituloNube").textContent = titulo;
+    $("textoNube").textContent = texto;
+    $("continuarNube").textContent = continuar;
+    $("continuarNube").onclick = alContinuar || null;
+    dialogoNube.returnValue = "";
+    const cancelar = () => dialogoNube.close("cancelar");
+    dialogoNube.addEventListener("close", () => {
+      $("continuarNube").onclick = null;
+      signal?.removeEventListener("abort", cancelar);
+      resolver(dialogoNube.returnValue === "continuar");
+    }, { once: true });
+    signal?.addEventListener("abort", cancelar, { once: true });
+    dialogoNube.showModal();
+  }));
+  turnoDialogoNube = tarea.catch(() => {});
+  return tarea;
+}
+
+async function consentimientoNube(ruta, signal) {
+  if (!navigator.onLine) throw new Error("Esta herramienta necesita internet");
+  const clave = "navajaPrivacidad:" + ruta;
+  try { if (localStorage.getItem(clave) === "si") return; } catch { /* almacenamiento deshabilitado */ }
+  if (aceptadasNube.has(ruta)) return;
+  const acepto = await preguntarNube("☁ Usa internet", privacidadNube[ruta]
+    + " Cloudflare Turnstile verifica tu conexión para prevenir abusos.", undefined, undefined, signal);
+  if (!acepto) throw new DOMException("Operación cancelada.", "AbortError");
+  aceptadasNube.add(ruta);
+  try { localStorage.setItem(clave, "si"); } catch { /* se recuerda durante esta visita */ }
+}
+
+async function pedirApi(ruta, opciones = {}) {
+  let resp;
+  try {
+    resp = await fetch(API + "/api" + ruta, { ...opciones, mode: "cors", cache: "no-store", referrerPolicy: "no-referrer" });
+  } catch (e) {
+    if (e.name === "AbortError") throw e;
+    throw new Error(navigator.onLine ? "No pudimos conectar con el servidor. Intenta otra vez." : "Esta herramienta necesita internet");
+  }
+  if (!resp.ok) {
+    const datos = await resp.json().catch(() => ({}));
+    const e = new Error(datos.error || "El servidor no pudo completar la operación.");
+    e.status = resp.status;
+    throw e;
+  }
+  return resp;
+}
+
+function cuerpoJson(datos) {
+  return { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(datos) };
+}
+
+async function tokenTurnstile(signal) {
+  const id = crypto.randomUUID();
+  const canal = new BroadcastChannel("navaja-verificacion-" + id);
+  const url = new URL(API + "/api/verificar");
+  url.search = new URLSearchParams({ canal: id, vuelta: base.href });
+  let tiempo, cancelar;
+  const token = new Promise((ok, mal) => {
+    canal.onmessage = ({ data }) => { if (typeof data === "string" && data.length <= 2048 && data) ok(data); };
+    cancelar = () => mal(new DOMException("Operación cancelada.", "AbortError"));
+  });
+  try {
+    if (!await preguntarNube("Verifica tu acceso", "Turnstile se abre en otra ventana. Completa la verificación para regresar a Navaja PDF.",
+      "Abrir verificación", () => window.open(url.href, "_blank", "popup,noopener,noreferrer,width=480,height=440"), signal)) {
+      throw new DOMException("Operación cancelada.", "AbortError");
+    }
+    signal?.throwIfAborted();
+    signal?.addEventListener("abort", cancelar, { once: true });
+    const limite = new Promise((_, mal) => {
+      tiempo = setTimeout(() => mal(new Error("No llegó la verificación. Permite las ventanas emergentes e intenta otra vez.")), 120_000);
+    });
+    return await Promise.race([token, limite]);
+  } finally {
+    clearTimeout(tiempo);
+    signal?.removeEventListener("abort", cancelar);
+    canal.close();
+  }
+}
+
+function devolverTurnstile() {
+  const vuelta = location.hash.match(/^#verificado=([a-f0-9-]{36})\.(.+)$/);
+  if (!vuelta) return false;
+  history.replaceState(null, "", base.href);
+  const canal = new BroadcastChannel("navaja-verificacion-" + vuelta[1]);
+  try { canal.postMessage(decodeURIComponent(vuelta[2])); }
+  catch { canal.close(); return false; }
+  setTimeout(() => { canal.close(); window.close(); }, 300);
+  return true;
+}
+
+const almacenamientoPase = "navajaPase:" + API;
+let paseNube, pidiendoPase;
+try { paseNube = JSON.parse(sessionStorage.getItem(almacenamientoPase) || "null"); } catch { /* sesión sin almacenamiento */ }
+
+async function obtenerPase(signal) {
+  if (paseNube && paseNube.vence > Date.now() / 1000 + 5) return paseNube.pase;
+  if (!pidiendoPase) {
+    pidiendoPase = (async () => {
+      const config = await (await pedirApi("/config", { signal })).json();
+      const token = config.sitekey ? await tokenTurnstile(signal) : "";
+      paseNube = await (await pedirApi("/pase", { ...cuerpoJson({ token }), signal })).json();
+      try { sessionStorage.setItem(almacenamientoPase, JSON.stringify(paseNube)); } catch { /* se recuerda en memoria */ }
+      return paseNube.pase;
+    })().finally(() => { pidiendoPase = null; });
+  }
+  return pidiendoPase;
+}
+
+async function usarNube(herramienta, ruta, opciones = {}) {
+  const { signal } = opciones;
+  signal?.throwIfAborted();
+  await consentimientoNube(herramienta, signal);
+  for (let intento = 0; ; intento++) {
+    const pase = await obtenerPase(signal);
+    try {
+      const headers = new Headers(opciones.headers);
+      headers.set("X-Navaja-Pase", pase);
+      return await pedirApi(ruta, { ...opciones, headers });
+    } catch (e) {
+      if (e.status !== 401 || intento > 0) throw e;
+      if (paseNube?.pase === pase) {
+        paseNube = null;
+        try { sessionStorage.removeItem(almacenamientoPase); } catch { /* sesión sin almacenamiento */ }
+      }
+    }
+  }
+}
+
+function mensajeNube(e) {
+  return e.name === "AbortError" ? "Operación cancelada." : e.message || "No se pudo completar la operación.";
+}
+
+const modoHtml = () => document.querySelector('input[name="entradaHtml"]:checked').value;
+for (const control of document.querySelectorAll('input[name="entradaHtml"]')) control.onchange = () => {
+  $("campoUrlHtml").hidden = modoHtml() !== "url";
+  $("campoArchivoHtml").hidden = modoHtml() !== "html";
+};
+$("botonHtml").onclick = async () => {
+  $("botonHtml").disabled = true;
+  try {
+    const datos = {
+      tamano: $("papelHtml").value, horizontal: $("orientacionHtml").value === "horizontal",
+      margen: $("margenHtml").value, fondo: $("fondoHtml").checked,
+    };
+    let nombre;
+    if (modoHtml() === "url") {
+      datos.url = $("urlHtml").value.trim();
+      if (!/^https?:\/\//i.test(datos.url) || !$("urlHtml").validity.valid) throw new Error("Escribe una dirección que empiece con http:// o https://.");
+      nombre = new URL(datos.url).hostname + ".pdf";
+    } else {
+      const f = $("archivoHtml").files[0];
+      if (!f) throw new Error("Primero elige un archivo .html.");
+      if (f.size > 2_000_000) throw new Error("El archivo HTML debe pesar hasta 2 MB.");
+      datos.html = await f.text();
+      nombre = f.name.replace(/\.html?$/i, "") + ".pdf";
+    }
+    aviso("avisoHtml", "Preparando el PDF…");
+    const r = await usarNube("html-a-pdf", "/html-a-pdf", cuerpoJson(datos));
+    filaDescarga($("salidaHtml"), new Uint8Array(await r.arrayBuffer()), nombre, "HTML convertido");
+    aviso("avisoHtml", "Listo.");
+  } catch (e) {
+    aviso("avisoHtml", mensajeNube(e), e.name !== "AbortError");
+  } finally {
+    $("botonHtml").disabled = false;
+  }
+};
+
+const RUTA_FIRMAS = "pedir-firmas-pdf";
+const MAX_SOLICITUD = 24_000_000;
+const claveHistorial = "navajaSolicitudes";
+const codNube = new TextEncoder();
+const decNube = new TextDecoder();
+const codClave = (bytes) => btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+const decClave = (texto) => Uint8Array.from(atob(texto.replaceAll("-", "+").replaceAll("_", "/")), (c) => c.charCodeAt(0));
+const cargarClave = (bytes) => crypto.subtle.importKey("raw", bytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+
+// Formato: IV de 12 bytes, seguido del bloque AES-GCM que incluye metadatos y PDF.
+async function cifrarSolicitud(clave, pdf, nombre, mensaje = "") {
+  const meta = codNube.encode(JSON.stringify({ nombre, mensaje }));
+  const total = 4 + meta.length + pdf.byteLength;
+  if (total + 28 > MAX_SOLICITUD) throw new Error("El archivo cifrado debe pesar hasta 24 MB.");
+  const claro = new Uint8Array(total);
+  new DataView(claro.buffer).setUint32(0, meta.length);
+  claro.set(meta, 4);
+  claro.set(new Uint8Array(pdf), 4 + meta.length);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cifrado = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, clave, claro);
+  return new Blob([iv, cifrado], { type: "application/octet-stream" });
+}
+
+async function descifrarSolicitud(clave, resp) {
+  try {
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    const claro = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.subarray(0, 12) }, clave, bytes.subarray(12));
+    const largo = new DataView(claro).getUint32(0);
+    if (!largo || largo + 4 >= claro.byteLength) throw new Error();
+    const { nombre, mensaje } = JSON.parse(decNube.decode(new Uint8Array(claro, 4, largo)));
+    if (typeof nombre !== "string" || typeof mensaje !== "string") throw new Error();
+    return { nombre, mensaje, bytes: new Uint8Array(claro, 4 + largo) };
+  } catch {
+    throw new Error("No pudimos abrir el archivo cifrado. Usa el enlace completo que incluye la clave.");
+  }
+}
+
+function enlaceSolicitud(tipo, id, token, clave) {
+  const url = new URL(urlDe(RUTA_FIRMAS));
+  url.search = new URLSearchParams({ [tipo]: id, t: token });
+  url.hash = clave;
+  return url.href;
+}
+
+function listaSolicitudes() {
+  try {
+    const filas = JSON.parse(localStorage.getItem(claveHistorial) || "[]");
+    return Array.isArray(filas) ? filas.filter((f) => f && Date.parse(f.vence) > Date.now()) : [];
+  } catch { return []; }
+}
+
+function guardarSolicitudes(filas) {
+  try { localStorage.setItem(claveHistorial, JSON.stringify(filas)); return true; }
+  catch { return false; }
+}
+
+function pintarSolicitudes() {
+  const filas = listaSolicitudes();
+  const lista = $("listaSolicitud");
+  lista.replaceChildren();
+  $("historialSolicitud").hidden = !filas.length;
+  for (const fila of filas) {
+    const li = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = fila.dueno;
+    link.textContent = fila.nombre;
+    li.append(link);
+    lista.append(li);
+  }
+}
+
+function botonNube(texto, accion) {
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "secundario";
+  boton.textContent = texto;
+  boton.onclick = accion;
+  return boton;
+}
+
+async function copiarNube(texto, id, alternativa) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    aviso(id, "Copiado.");
+  } catch {
+    alternativa?.select();
+    aviso(id, "No pudimos copiar automáticamente. Selecciona y copia el texto.", true);
+  }
+}
+
+function pintarEnlace(titulo, enlace) {
+  const etiqueta = document.createElement("label");
+  etiqueta.className = "campo";
+  etiqueta.textContent = titulo;
+  const caja = document.createElement("input");
+  caja.type = "text";
+  caja.readOnly = true;
+  caja.value = enlace;
+  etiqueta.append(caja);
+  const acciones = document.createElement("div");
+  acciones.className = "acciones";
+  acciones.append(botonNube("Copiar", () => copiarNube(enlace, "avisoCrearSolicitud", caja)));
+  if (navigator.share) acciones.append(botonNube("Compartir", async () => {
+    try { await navigator.share({ title: titulo, url: enlace }); }
+    catch (e) { if (e.name !== "AbortError") aviso("avisoCrearSolicitud", "No se pudo compartir. Puedes copiar el enlace.", true); }
+  }));
+  $("enlacesSolicitud").append(etiqueta, acciones);
+}
+
+let pdfSolicitud;
+zonaDeArchivos($("zonaSolicitud"), $("archivoSolicitud"), (fs) => {
+  pdfSolicitud = fs.find(esPdf);
+  $("infoSolicitud").textContent = pdfSolicitud?.name || "Elige un archivo PDF.";
+  $("botonSolicitud").disabled = !pdfSolicitud;
+}, false);
+
+$("botonSolicitud").onclick = async () => {
+  const f = pdfSolicitud;
+  if (!f) return;
+  const boton = $("botonSolicitud");
+  boton.disabled = true;
+  aviso("avisoCrearSolicitud", "Preparando el PDF cifrado…");
+  try {
+    if (f.size >= MAX_SOLICITUD) throw new Error("El archivo cifrado debe pesar hasta 24 MB.");
+    await consentimientoNube(RUTA_FIRMAS);
+    const bytesClave = crypto.getRandomValues(new Uint8Array(32));
+    const body = await cifrarSolicitud(await cargarClave(bytesClave), await f.arrayBuffer(), f.name, $("mensajeSolicitud").value);
+    const r = await usarNube(RUTA_FIRMAS, "/firmas", { method: "POST", body });
+    const { id, tokenFirmante, tokenDueno, vence } = await r.json();
+    const clave = codClave(bytesClave);
+    const firmante = enlaceSolicitud("f", id, tokenFirmante, clave);
+    const dueno = enlaceSolicitud("d", id, tokenDueno, clave);
+    $("enlacesSolicitud").replaceChildren();
+    pintarEnlace("Para quien firma", firmante);
+    pintarEnlace("Tu enlace para recoger el firmado (no lo compartas)", dueno);
+    const guardado = guardarSolicitudes([{ id, nombre: f.name, firmante, dueno, vence }, ...listaSolicitudes()]);
+    pintarSolicitudes();
+    aviso("avisoCrearSolicitud", guardado ? "Listo. Envía el enlace para quien firma." : "Listo. Copia tu enlace de dueño para conservarlo.");
+  } catch (e) {
+    aviso("avisoCrearSolicitud", mensajeNube(e), e.name !== "AbortError");
+  } finally {
+    boton.disabled = !pdfSolicitud;
+  }
+};
+
+let solicitudActual;
+let vistaFirmaRemota = "";
+let editorFirmaLocal;
+function montarEditorRemoto() {
+  if (editorFirmaLocal) return;
+  editorFirmaLocal = {
+    documento: paraFirmar, puestas: [...puestas], info: $("infoFirma").textContent,
+    aviso: $("avisoFirma").textContent, resultados: [...$("salidaFirma").childNodes],
+  };
+  paraFirmar = null;
+  puestas.length = 0;
+  turnoMesa++;
+  $("opcionesFirma").hidden = true;
+  $("editorSolicitud").append($("editorFirma"));
+  $("zonaFirma").hidden = true;
+  $("botonFirma").textContent = "Firmar y enviar";
+  $("salidaFirma").replaceChildren();
+}
+
+function restaurarEditorFirma() {
+  if (!editorFirmaLocal) return;
+  paraFirmar?.vista.destroy();
+  turnoMesa++;
+  const normal = editorFirmaLocal;
+  editorFirmaLocal = null;
+  paraFirmar = normal.documento;
+  puestas.splice(0, puestas.length, ...normal.puestas);
+  $("opcionesFirma").hidden = !paraFirmar;
+  $("repetirFirma").hidden = paraFirmar?.total === 1;
+  $("zonaFirma").hidden = false;
+  $("botonFirma").textContent = "Firmar PDF";
+  $("infoFirma").textContent = normal.info;
+  aviso("avisoFirma", normal.aviso);
+  $("salidaFirma").replaceChildren(...normal.resultados);
+  $("vista-firmar").append($("editorFirma"));
+  if (paraFirmar) pintarMesa().catch(() => aviso("avisoFirma", "No se pudo mostrar la página.", true));
+}
+
+function vistaSolicitud(activa) {
+  const direccion = activa ? location.search + location.hash : "";
+  if (direccion === vistaFirmaRemota && direccion) return;
+  vistaFirmaRemota = direccion;
+  solicitudActual?.control.abort();
+  solicitudActual = null;
+  restaurarEditorFirma();
+  if (!activa) return;
+  const query = new URLSearchParams(location.search);
+  const f = query.get("f"), d = query.get("d"), token = query.get("t");
+  const hayEnlace = query.has("f") || query.has("d");
+  $("crearSolicitud").hidden = hayEnlace;
+  $("abrirSolicitud").hidden = !hayEnlace;
+  if (!hayEnlace) { pintarSolicitudes(); return; }
+  $("notaSolicitud").textContent = "";
+  $("venceSolicitud").textContent = "";
+  $("salidaSolicitud").replaceChildren();
+  $("verSolicitud").hidden = false;
+  $("verSolicitud").disabled = false;
+  $("verSolicitud").textContent = d ? "Revisar estado" : "Abrir PDF para firmar";
+  $("borrarSolicitud").hidden = true;
+  $("recogerSolicitud").hidden = true;
+  const clave = location.hash.slice(1);
+  if ((query.has("f") === query.has("d")) || !/^[a-f0-9]{48}$/.test(f || d || "") || !/^[a-f0-9]{48}$/.test(token || "") || !/^[\w-]{43}$/.test(clave)) {
+    $("verSolicitud").disabled = true;
+    aviso("avisoSolicitud", "Este enlace está incompleto. Usa el enlace con la clave incluida.", true);
+    return;
+  }
+  solicitudActual = { id: f || d, dueno: !!d, token, clave, control: new AbortController() };
+  aviso("avisoSolicitud", navigator.onLine ? "" : "Esta herramienta necesita internet");
+}
+
+function apiSolicitud(s, metodo = "GET", parte = "", body) {
+  return usarNube(RUTA_FIRMAS, "/firmas/" + s.id + parte + "?" + new URLSearchParams({ t: s.token }),
+    { method: metodo, body, signal: s.control.signal });
+}
+
+async function operacionSolicitud(boton, accion) {
+  const s = solicitudActual;
+  if (!s || s.ocupada) return;
+  s.ocupada = true;
+  boton.disabled = true;
+  try { await accion(s); }
+  catch (e) { if (s === solicitudActual) aviso("avisoSolicitud", mensajeNube(e), e.name !== "AbortError"); }
+  finally { s.ocupada = false; if (s === solicitudActual) boton.disabled = false; }
+}
+
+$("verSolicitud").onclick = () => operacionSolicitud($("verSolicitud"), async (s) => {
+  aviso("avisoSolicitud", s.dueno ? "Revisando el estado…" : "Abriendo el PDF cifrado…");
+  if (s.dueno) {
+    const { estado, vence } = await (await apiSolicitud(s, "GET", "/estado")).json();
+    if (s !== solicitudActual) return;
+    $("venceSolicitud").textContent = "Disponible hasta el " + new Date(vence).toLocaleString("es-MX") + ".";
+    $("verSolicitud").textContent = "Revisar otra vez";
+    $("borrarSolicitud").hidden = false;
+    $("recogerSolicitud").hidden = estado !== "firmado";
+    aviso("avisoSolicitud", estado === "firmado" ? "Firmado" : "Esperando firma");
+    return;
+  }
+  const clave = await cargarClave(decClave(s.clave));
+  const { nombre, mensaje, bytes } = await descifrarSolicitud(clave, await apiSolicitud(s));
+  if (s !== solicitudActual) return;
+  montarEditorRemoto();
+  $("notaSolicitud").textContent = mensaje ? "Mensaje para ti: " + mensaje : "";
+  if (await cargarEditorFirma(new File([bytes], nombre, { type: "application/pdf" }), s) && s === solicitudActual) {
+    $("verSolicitud").hidden = true;
+    aviso("avisoSolicitud", nombre);
+  }
+});
+
+async function enviarFirma(s, bytes, nombre) {
+  s.control.signal.throwIfAborted();
+  const clave = await cargarClave(decClave(s.clave));
+  const cuerpo = await cifrarSolicitud(clave, bytes, nombre);
+  await apiSolicitud(s, "PUT", "", cuerpo);
+  if (s !== solicitudActual) return;
+  restaurarEditorFirma();
+  aviso("avisoSolicitud", "Listo, ya se lo mandamos");
+}
+
+$("recogerSolicitud").onclick = () => operacionSolicitud($("recogerSolicitud"), async (s) => {
+  const clave = await cargarClave(decClave(s.clave));
+  const { nombre, bytes } = await descifrarSolicitud(clave, await apiSolicitud(s, "GET", "/firmado"));
+  if (s !== solicitudActual) return;
+  $("salidaSolicitud").replaceChildren();
+  filaDescarga($("salidaSolicitud"), bytes, nombre, "PDF firmado");
+  aviso("avisoSolicitud", "Firmado. Descarga el PDF aquí abajo.");
+});
+
+$("borrarSolicitud").onclick = () => operacionSolicitud($("borrarSolicitud"), async (s) => {
+  if (!await preguntarNube("¿Borrar esta solicitud?", "Se borrarán del servidor el PDF original y el firmado. Los enlaces dejarán de funcionar.", "Borrar del servidor", undefined, s.control.signal)) return;
+  await apiSolicitud(s, "DELETE");
+  guardarSolicitudes(listaSolicitudes().filter((f) => f.id !== s.id));
+  if (s !== solicitudActual) return;
+  for (const id of ["verSolicitud", "recogerSolicitud", "borrarSolicitud"]) $(id).hidden = true;
+  $("venceSolicitud").textContent = "";
+  $("salidaSolicitud").replaceChildren();
+  aviso("avisoSolicitud", "Borrado del servidor.");
+});
+
+function lotesNube(partes, maximo, cantidad = Infinity) {
+  const lotes = [];
+  let actual = [], largo = 0;
+  for (const parte of partes) {
+    if (actual.length && (actual.length >= cantidad || largo + parte.length + 2 > maximo)) {
+      lotes.push(actual);
+      actual = [];
+      largo = 0;
+    }
+    actual.push(parte);
+    largo += parte.length + 2;
+  }
+  if (actual.length) lotes.push(actual);
+  return lotes;
+}
+
+function partirTextoNube(texto, maximo) {
+  const piezas = [];
+  let inicio = 0;
+  while (texto.length - inicio > maximo) {
+    let fin = inicio + maximo;
+    const espacio = Math.max(texto.lastIndexOf(" ", fin - 1), texto.lastIndexOf("\n", fin - 1));
+    if (espacio >= inicio + maximo / 2) fin = espacio + 1;
+    else if (/[\uD800-\uDBFF]/.test(texto[fin - 1])) fin--;
+    piezas.push(texto.slice(inicio, fin));
+    inicio = fin;
+  }
+  if (inicio < texto.length) piezas.push(texto.slice(inicio));
+  return piezas;
+}
+
+async function sesionLocal(Tipo, opciones, tarea) {
+  if (!Tipo?.availability || !Tipo?.create) return null;
+  const { signal, clave } = tarea;
+  const estado = await Tipo.availability(opciones);
+  if (!["available", "downloadable", "downloading"].includes(estado)) return null;
+  signal.throwIfAborted();
+  if (estado !== "available" && !navigator.onLine) return null;
+  const crear = () => Tipo.create({ ...opciones, signal, monitor(m) {
+    m.addEventListener("downloadprogress", (e) => {
+      const avance = e.total ? e.loaded / e.total : e.loaded;
+      aviso("aviso" + clave, `Descargando el modelo al navegador… ${Math.round(avance * 100)} %`);
+      $("avance" + clave).value = avance;
+    });
+  } });
+  if (estado === "available" || navigator.userActivation?.isActive) return crear();
+  let sesion;
+  if (!await preguntarNube("Descarga del modelo", "Tu navegador puede bajar el modelo para procesar el texto en tu equipo.",
+    "Descargar modelo", () => { sesion = Promise.resolve().then(crear); sesion.catch(() => {}); }, signal)) {
+    throw new DOMException("Operación cancelada.", "AbortError");
+  }
+  return sesion;
+}
+
+async function detectarLocal(muestra, tarea) {
+  const detector = await sesionLocal(globalThis.LanguageDetector, { expectedInputLanguages: ["es", "en", "pt", "fr", "de", "it"] }, tarea);
+  if (!detector) return null;
+  try {
+    const [idioma] = await detector.detect(muestra, { signal: tarea.signal });
+    return idioma?.detectedLanguage?.split("-")[0] || null;
+  } finally {
+    detector.destroy?.();
+  }
+}
+
+async function leerParaIa(archivo, tarea) {
+  const pdfjs = await pdfJs();
+  const carga = pdfjs.getDocument({ data: await archivo.arrayBuffer() });
+  try {
+    const pdf = await carga.promise;
+    const paginas = [];
+    for (let i = 0; i < pdf.numPages; i++) {
+      tarea.signal.throwIfAborted();
+      tarea.avance(i, pdf.numPages, "Leyendo el PDF");
+      const pagina = await pdf.getPage(i + 1);
+      paginas.push(await leerPaginaWord(pdfjs, pagina, false));
+      pagina.cleanup();
+    }
+    quitarPiesWord(paginas);
+    return paginas;
+  } finally {
+    await carga.destroy();
+  }
+}
+
+const MOTOR_LOCAL = "IA de tu navegador, no salió de tu equipo";
+const MOTOR_SERVIDOR = "Cloudflare Workers AI";
+function elegirMotor(tarea, motor) { $("motor" + tarea.clave).textContent = motor; }
+
+async function traducirNube(paginas, bloques, tarea) {
+  const ruta = "traducir-pdf";
+  const { signal, de, a } = tarea;
+  const trozos = bloques.flatMap((b) => b.trozos).filter((t) => t.t.trim());
+  const partes = trozos.flatMap((trozo) => partirTextoNube(trozo.t, 900).map((texto) => ({ trozo, texto })));
+  const muestra = partes.slice(0, 20).map(({ texto }) => texto).join("\n").slice(0, 2500);
+  let traducciones;
+  if (globalThis.Translator) {
+    let traductor;
+    try {
+      const origen = de === "detectar" ? await detectarLocal(muestra, tarea) : de;
+      if (origen === a) traducciones = partes.map(({ texto }) => texto);
+      else if (origen) traductor = await sesionLocal(globalThis.Translator, { sourceLanguage: origen, targetLanguage: a }, tarea);
+      if (traductor) {
+        const salida = [];
+        for (const [i, { texto }] of partes.entries()) {
+          signal.throwIfAborted();
+          tarea.avance(i, partes.length, "Traduciendo");
+          salida.push(await traductor.translate(texto, { signal }));
+        }
+        traducciones = salida;
+      }
+      if (traducciones) elegirMotor(tarea, MOTOR_LOCAL);
+    } catch (e) {
+      if (e.name === "AbortError") throw e;
+    } finally {
+      traductor?.destroy?.();
+    }
+  }
+  if (!traducciones) {
+    traducciones = [];
+    const lotes = lotesNube(partes.map(({ texto }) => texto), 20_000, 50);
+    let origen = de;
+    for (const lote of lotes) {
+      tarea.avance(traducciones.length, partes.length, "Traduciendo");
+      const r = await usarNube(ruta, "/ia/traducir", { ...cuerpoJson({ textos: lote, de: origen, a }), signal });
+      const datos = await r.json();
+      if (datos.traducciones?.length !== lote.length) throw new Error("No llegó la traducción completa.");
+      origen = datos.de;
+      traducciones.push(...datos.traducciones);
+    }
+    elegirMotor(tarea, MOTOR_SERVIDOR);
+  }
+  signal.throwIfAborted();
+  const traducido = new Map();
+  for (const [i, { trozo, texto }] of partes.entries()) {
+    const frase = traducciones[i].trim();
+    const anterior = traducido.get(trozo);
+    const separador = anterior && !/\s$/.test(anterior) && !/^\s/.test(texto) ? " " : "";
+    traducido.set(trozo, (anterior || "") + separador + (texto.match(/^\s*/)[0] + frase + texto.match(/\s*$/)[0]));
+  }
+  for (const trozo of trozos) trozo.t = traducido.get(trozo);
+  const nombre = sinExt(tarea.archivo.name) + " (traducido)";
+  const lista = $("salidaTraducir");
+  filaDescarga(lista, codNube.encode(bloques.map((b) => b.trozos.map((t) => t.t).join("")).join("\n\n")),
+    nombre + ".txt", "Texto traducido", "text/plain;charset=utf-8");
+  filaDescarga(lista, docxDe(paginas, false), nombre + ".docx", "Word traducido",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+}
+
+const extensionLocal = { corto: "short", medio: "medium", largo: "long" };
+async function resumirPartes(texto, resumir, maximo, tarea) {
+  let partes = lotesNube(partirTextoNube(texto, maximo - 2), maximo).map((lote) => lote.join(""));
+  let ronda = 0;
+  while (true) {
+    const resumenes = [];
+    for (const [i, parte] of partes.entries()) {
+      tarea.signal.throwIfAborted();
+      tarea.avance(i, partes.length, ronda ? "Reuniendo los resúmenes" : "Resumiendo");
+      resumenes.push(await resumir(parte, partes.length === 1 ? tarea.largo : "corto"));
+    }
+    if (resumenes.length === 1) return resumenes[0];
+    // Acota cada resumen intermedio para que en cada ronda quepan dos o más juntos.
+    partes = lotesNube(resumenes.map((r) => r.slice(0, Math.floor(maximo / 3))), maximo).map((lote) => lote.join("\n\n"));
+    ronda++;
+  }
+}
+
+async function resumirNube(_paginas, bloques, tarea) {
+  const { signal, idioma, largo } = tarea;
+  const texto = bloques.map((b) => b.trozos.map((t) => t.t).join("")).join("\n\n");
+  let resumen;
+  if (globalThis.Summarizer) {
+    const sesiones = new Map();
+    try {
+      const origen = await detectarLocal(texto.slice(0, 2500), tarea).catch((e) => {
+        if (e.name === "AbortError") throw e;
+        return null;
+      });
+      const entrada = [...new Set([origen, idioma].filter(Boolean))];
+      const obtener = async (tam) => {
+        if (!sesiones.has(tam)) {
+          const s = await sesionLocal(globalThis.Summarizer, {
+            type: "key-points", format: "markdown", length: extensionLocal[tam], outputLanguage: idioma, expectedInputLanguages: entrada,
+          }, tarea);
+          if (!s) throw new Error("Modelo no disponible");
+          sesiones.set(tam, s);
+        }
+        return sesiones.get(tam);
+      };
+      await obtener(largo);
+      resumen = await resumirPartes(texto, async (parte, tam) => {
+        const s = await obtener(tam);
+        const resultado = await s.summarize(parte, { signal });
+        if (!resultado.trim()) throw new Error("Resumen vacío");
+        return resultado;
+      }, 3000, tarea);
+      elegirMotor(tarea, MOTOR_LOCAL);
+    } catch (e) {
+      if (e.name === "AbortError") throw e;
+    } finally {
+      for (const s of sesiones.values()) s.destroy?.();
+    }
+  }
+  if (!resumen) {
+    resumen = await resumirPartes(texto, async (parte, tam) => {
+      const r = await usarNube("resumir-pdf", "/ia/resumir", { ...cuerpoJson({ texto: parte, largo: tam, idioma }), signal });
+      return (await r.json()).resumen;
+    }, 18_000, tarea);
+    elegirMotor(tarea, MOTOR_SERVIDOR);
+  }
+  signal.throwIfAborted();
+  $("textoResumen").textContent = resumen;
+  $("textoResumen").lang = idioma;
+  $("textoResumen").hidden = $("copiarResumen").hidden = false;
+  filaDescarga($("salidaResumir"), codNube.encode(resumen + "\n"), sinExt(tarea.archivo.name) + " (resumen).md",
+    "Resumen", "text/markdown;charset=utf-8");
+}
+
+function prepararVistaIa(clave, ejecutar) {
+  let archivo, control;
+  const boton = $("boton" + clave), cancelar = $("cancelar" + clave);
+  const ocr = $("ocr" + clave), barra = $("avance" + clave);
+  zonaDeArchivos($("zona" + clave), $("archivo" + clave), (fs) => {
+    if (control) return;
+    archivo = fs.find(esPdf);
+    $("info" + clave).textContent = archivo?.name || "Elige un archivo PDF.";
+    boton.disabled = !archivo;
+    ocr.hidden = true;
+  }, false);
+  cancelar.onclick = () => control?.abort();
+  ocr.onclick = () => abrirCon("ocr-pdf", [archivo]);
+  boton.onclick = async () => {
+    if (!archivo || control) return;
+    control = new AbortController();
+    const tarea = {
+      clave, archivo, signal: control.signal, de: $("idiomaOrigen").value, a: $("idiomaDestino").value,
+      idioma: $("idiomaResumen").value, largo: $("largoResumen").value,
+      avance(hechas, total, mensaje) {
+        barra.value = hechas / total;
+        aviso("aviso" + clave, `${mensaje}… ${hechas + 1} de ${total}`);
+      },
+    };
+    boton.disabled = true;
+    cancelar.hidden = barra.hidden = false;
+    ocr.hidden = true;
+    barra.value = 0;
+    $("motor" + clave).textContent = "";
+    $("salida" + clave).replaceChildren();
+    if (clave === "Resumir") $("textoResumen").hidden = $("copiarResumen").hidden = true;
+    try {
+      const paginas = await leerParaIa(archivo, tarea);
+      const bloques = paginas.flatMap((p) => p.bloques).filter((b) => b.trozos.some((t) => t.t.trim()));
+      if (!bloques.length) {
+        ocr.hidden = false;
+        throw new Error("Este PDF no tiene texto. Pásalo primero por Reconocer texto (OCR).");
+      }
+      await ejecutar(paginas, bloques, tarea);
+      barra.value = 1;
+      aviso("aviso" + clave, "Listo.");
+    } catch (e) {
+      aviso("aviso" + clave, mensajeNube(e), e.name !== "AbortError");
+      barra.hidden = true;
+    } finally {
+      control = null;
+      boton.disabled = false;
+      cancelar.hidden = true;
+    }
+  };
+}
+
+prepararVistaIa("Traducir", traducirNube);
+prepararVistaIa("Resumir", resumirNube);
+$("copiarResumen").onclick = () => copiarNube($("textoResumen").textContent, "avisoResumir");
+if (!devolverTurnstile()) verVista();

@@ -1,7 +1,7 @@
 <body>
 <main>
   <h1><a class="marca" href="./"><img src="icono.svg" alt="">{{NOMBRE}}</a></h1>
-  <p class="sub">Herramientas de PDF e imágenes. Todo pasa en tu navegador: tus archivos no se suben a ningún lado.</p>
+  <p class="sub">Herramientas de PDF e imágenes. La mayoría funcionan en tu equipo. Las que pueden usar el servidor llevan la etiqueta ☁ Usa internet.</p>
 
   <div id="vista-compartido" hidden>
     <p class="volver"><a href="./">← Todas las herramientas</a></p>
@@ -41,6 +41,13 @@
       <li><a href="#formulario"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12.5h2.5M13 12.5h3"/><path d="M8 16.5l1.3 1.3 2.4-2.6"/></svg><b>Llenar formulario</b><span>Escribir en los campos de un PDF</span></a></li>
       <li><a href="#editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9.5 11h5M12 11v6"/></svg><b>Editar PDF</b><span>Escribir, tapar, resaltar y poner imágenes</span></a></li>
     </ul>
+    <h2 class="grupo">Con internet</h2>
+    <ul class="portada">
+      <li><a href="#html-a-pdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h16M8 13l-2 2 2 2m8-4 2 2-2 2"/></svg><b>HTML a PDF</b><span>Convierte una página web o un archivo HTML</span><small class="etiqueta-nube">☁ Usa internet</small></a></li>
+      <li><a href="#pedir-firmas-pdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h11l4 4v12H4zM8 16l3-3m1 3h4"/></svg><b>Pedir firmas</b><span>Envía un PDF cifrado para que lo firmen</span><small class="etiqueta-nube">☁ Usa internet</small></a></li>
+      <li><a href="#traducir-pdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h12M9 3v2m-4 3c1 4 4 6 8 8m0-11c-1 5-4 8-9 11m10 4 4-9 4 9m-6-3h4"/></svg><b>Traducir PDF</b><span>Descarga la traducción en Word y texto</span><small class="etiqueta-nube">☁ Usa internet</small></a></li>
+      <li><a href="#resumir-pdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h4"/></svg><b>Resumir PDF</b><span>Saca las ideas principales de un PDF</span><small class="etiqueta-nube">☁ Usa internet</small></a></li>
+    </ul>
     <h2 class="grupo">Imágenes</h2>
     <ul class="portada">
       <li><a href="#quitar-fondo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3zM6 16l4-5 3 3 2-2 3 4M16 8h2"/></svg><b>Quitar fondo</b><span>Separa a la persona del fondo de la foto</span></a></li>
@@ -53,6 +60,113 @@
       <li><a href="#convertir-imagen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M14 5h3a2 2 0 0 1 2 2v3M17 8l2 2 2-2M10 19H7a2 2 0 0 1-2-2v-3M7 16l-2-2-2 2"/></svg><b>Convertir imagen</b><span>A JPG, PNG o WebP</span></a></li>
       <li><a href="#girar-imagen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="10" width="11" height="11" rx="1.5"/><path d="M11 3.5h2.5a6 6 0 0 1 6 6V12M17 9.8l2.5 2.5 2.5-2.5"/></svg><b>Girar imagen</b><span>Enderezar fotos de lado o de cabeza</span></a></li>
     </ul>
+  </div>
+
+
+  <dialog id="dialogoNube" aria-labelledby="tituloNube">
+    <h2 id="tituloNube"></h2>
+    <p id="textoNube"></p>
+    <form method="dialog" class="acciones">
+      <button id="continuarNube" value="continuar">Entendido, continuar</button>
+      <button class="secundario" value="cancelar">Cancelar</button>
+    </form>
+  </dialog>
+
+  <div id="vista-html-a-pdf" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>HTML a PDF <small class="etiqueta-nube">☁ Usa internet</small></h2>
+    <section class="tarjeta">
+      <fieldset class="modo">
+        <legend>Qué quieres convertir</legend>
+        <label><input type="radio" name="entradaHtml" value="url" checked> Página web (URL)</label>
+        <label><input type="radio" name="entradaHtml" value="html"> Archivo .html</label>
+      </fieldset>
+      <label id="campoUrlHtml" class="campo">Dirección de la página <input id="urlHtml" type="url" placeholder="https://ejemplo.com"></label>
+      <label id="campoArchivoHtml" class="campo" hidden>Archivo de hasta 2 MB <input id="archivoHtml" type="file" accept=".html,.htm,text/html"></label>
+      <div class="opciones">
+        <label class="campo">Tamaño <select id="papelHtml"><option value="carta">Carta</option><option value="a4">A4</option><option value="oficio">Oficio</option></select></label>
+        <label class="campo">Orientación <select id="orientacionHtml"><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></label>
+        <label class="campo">Márgenes <select id="margenHtml"><option value="normal">Normales</option><option value="chico">Chicos</option><option value="ninguno">Sin márgenes</option></select></label>
+      </div>
+      <fieldset class="modo"><label><input id="fondoHtml" type="checkbox"> Incluir el fondo</label></fieldset>
+      <div class="acciones"><button id="botonHtml">Convertir a PDF</button></div>
+      <p class="aviso" id="avisoHtml" role="status"></p>
+      <ul class="filas" id="salidaHtml"></ul>
+    </section>
+  </div>
+
+  <div id="vista-pedir-firmas-pdf" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Pedir firmas <small class="etiqueta-nube">☁ Usa internet</small></h2>
+    <section class="tarjeta" id="crearSolicitud">
+      <p>Los archivos se borran del servidor después de 7 días.</p>
+      <div class="zona" id="zonaSolicitud" tabindex="0" role="button" aria-label="Elegir PDF"><b>Elige o arrastra un PDF</b><span id="infoSolicitud">Archivo .pdf</span></div>
+      <input type="file" id="archivoSolicitud" hidden accept=".pdf,application/pdf">
+      <label class="campo">Mensaje para quien firma (opcional)<textarea id="mensajeSolicitud" rows="3" maxlength="2000"></textarea></label>
+      <div class="acciones"><button id="botonSolicitud" disabled>Crear enlaces</button></div>
+      <p class="aviso" id="avisoCrearSolicitud" role="status"></p>
+      <div id="enlacesSolicitud"></div>
+      <section id="historialSolicitud" hidden><h3>Tus solicitudes</h3><ul id="listaSolicitud" class="filas"></ul></section>
+    </section>
+    <section class="tarjeta" id="abrirSolicitud" hidden>
+      <p>La solicitud se borra del servidor después de 7 días.</p>
+      <p id="venceSolicitud"></p>
+      <p id="notaSolicitud" class="mensaje-nube"></p>
+      <div class="acciones">
+        <button id="verSolicitud">Abrir PDF para firmar</button>
+        <button id="recogerSolicitud" hidden>Recoger el PDF firmado</button>
+        <button class="secundario" id="borrarSolicitud" hidden>Borrar del servidor</button>
+      </div>
+      <p class="aviso" id="avisoSolicitud" role="status"></p>
+      <ul class="filas" id="salidaSolicitud"></ul>
+    </section>
+    <div id="editorSolicitud"></div>
+  </div>
+
+  <div id="vista-traducir-pdf" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Traducir PDF <small class="etiqueta-nube">☁ Usa internet</small></h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaTraducir" tabindex="0" role="button" aria-label="Elegir PDF"><b>Elige o arrastra un PDF</b><span id="infoTraducir">Archivo .pdf</span></div>
+      <input type="file" id="archivoTraducir" hidden accept=".pdf,application/pdf">
+      <div class="opciones">
+        <label class="campo">De <select id="idiomaOrigen"><option value="detectar">Detectar</option><option value="es">Español</option><option value="en">Inglés</option><option value="pt">Portugués</option><option value="fr">Francés</option><option value="de">Alemán</option><option value="it">Italiano</option></select></label>
+        <label class="campo">A <select id="idiomaDestino"><option value="es">Español</option><option value="en" selected>Inglés</option><option value="pt">Portugués</option><option value="fr">Francés</option><option value="de">Alemán</option><option value="it">Italiano</option></select></label>
+      </div>
+      <div class="acciones">
+        <button id="botonTraducir" disabled>Traducir</button>
+        <button class="secundario" id="cancelarTraducir" hidden>Cancelar</button>
+        <button class="secundario" id="ocrTraducir" hidden>Seguir con Reconocer texto (OCR)</button>
+      </div>
+      <progress id="avanceTraducir" aria-label="Avance de traducir" hidden></progress>
+      <p id="motorTraducir" class="aviso"></p>
+      <p class="aviso" id="avisoTraducir" role="status"></p>
+      <ul class="filas" id="salidaTraducir"></ul>
+    </section>
+  </div>
+
+  <div id="vista-resumir-pdf" hidden>
+    <p class="volver"><a href="#">← Todas las herramientas</a></p>
+    <h2>Resumir PDF <small class="etiqueta-nube">☁ Usa internet</small></h2>
+    <section class="tarjeta">
+      <div class="zona" id="zonaResumir" tabindex="0" role="button" aria-label="Elegir PDF"><b>Elige o arrastra un PDF</b><span id="infoResumir">Archivo .pdf</span></div>
+      <input type="file" id="archivoResumir" hidden accept=".pdf,application/pdf">
+      <div class="opciones">
+        <label class="campo">Idioma del resumen <select id="idiomaResumen"><option value="es">Español</option><option value="en">Inglés</option><option value="pt">Portugués</option><option value="fr">Francés</option><option value="de">Alemán</option><option value="it">Italiano</option></select></label>
+        <label class="campo">Extensión <select id="largoResumen"><option value="corto">Corto</option><option value="medio" selected>Medio</option><option value="largo">Largo</option></select></label>
+      </div>
+      <div class="acciones">
+        <button id="botonResumir" disabled>Resumir</button>
+        <button class="secundario" id="cancelarResumir" hidden>Cancelar</button>
+        <button class="secundario" id="ocrResumir" hidden>Seguir con Reconocer texto (OCR)</button>
+      </div>
+      <progress id="avanceResumir" aria-label="Avance de resumir" hidden></progress>
+      <p id="motorResumir" class="aviso"></p>
+      <pre id="textoResumen" class="mensaje-nube" hidden></pre>
+      <button id="copiarResumen" class="secundario" hidden>Copiar</button>
+      <p class="aviso" id="avisoResumir" role="status"></p>
+      <ul class="filas" id="salidaResumir"></ul>
+    </section>
   </div>
 
   <div id="vista-office" hidden>
@@ -543,7 +657,7 @@
   <div id="vista-firmar" hidden>
     <p class="volver"><a href="#">← Todas las herramientas</a></p>
     <h2>Firmar PDF</h2>
-    <section class="tarjeta">
+    <section class="tarjeta" id="editorFirma">
       <div class="zona" id="zonaFirma" tabindex="0" role="button" aria-label="Elegir el PDF que se va a firmar">
         <b>Elige o arrastra un PDF</b>
         <span id="infoFirma">Después dibujas tu firma y tocas la hoja en el lugar donde va.</span>

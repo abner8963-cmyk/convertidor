@@ -1,0 +1,26 @@
+{
+  "name": "navaja-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "kv_namespaces": [{ "binding": "FIRMAS", "id": "0ff322729994466d9cd40f74fc5ad0d9" }],
+  "ai": { "binding": "AI" },
+  "browser": { "binding": "BROWSER" },
+  "durable_objects": {
+    "bindings": [
+      { "name": "SOLICITUD", "class_name": "Solicitud" },
+      { "name": "CUOTA", "class_name": "Cuota" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Solicitud", "Cuota"] }],
+  "ratelimits": [
+    { "name": "LIMITE_HTML", "namespace_id": "501", "simple": { "limit": 10, "period": 60 } },
+    { "name": "LIMITE_IA", "namespace_id": "502", "simple": { "limit": 30, "period": 60 } },
+    { "name": "LIMITE_FIRMAS", "namespace_id": "503", "simple": { "limit": 10, "period": 60 } },
+    { "name": "LIMITE_PASE", "namespace_id": "504", "simple": { "limit": 10, "period": 60 } }
+  ],
+  "vars": {
+    "ORIGENES": "https://convertidor.abner8963.workers.dev,https://abner8963-cmyk.github.io,http://localhost:8799,http://127.0.0.1:8799",
+    "TURNSTILE_SITEKEY": ""
+  }
+}

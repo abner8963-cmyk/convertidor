@@ -215,3 +215,63 @@ así que cambiar de herramienta no recarga la página; los enlaces viejos (`#uni
 - Fuente: `fuente/cuerpo.html` (el HTML de la app), `app.css` y `app.js`.
 - `python3 generar.py` escribe `index.html`, las carpetas de cada herramienta, `sitemap.xml` y `robots.txt`.
   Ahí mismo están el nombre (`NOMBRE`), la dirección principal (`SITIO`) y los textos de cada página.
+
+## Servidor de las herramientas ☁
+
+Las herramientas con la etiqueta «☁ Usa internet» piden permiso antes del primer uso que envía
+datos. La aceptación se recuerda por herramienta en el navegador. El sitio estático y el Worker
+`navaja-api` son publicaciones separadas. La app usa `https://navaja-api.abner8963.workers.dev`
+y en localhost usa `http://127.0.0.1:8787`.
+
+### Publicar el Worker
+
+Desde `servidor/`, corre `deno install`. Configura un widget de Turnstile para el dominio
+`navaja-api.abner8963.workers.dev` y pon su clave pública en `TURNSTILE_SITEKEY` en
+`wrangler.jsonc`. Con tu cuenta de Cloudflare configurada, registra los secretos y publica:
+
+```sh
+deno run -A npm:wrangler@4 secret put TURNSTILE_SECRET
+deno run -A npm:wrangler@4 secret put PASE_SECRET
+deno run -A npm:wrangler@4 deploy
+```
+
+Usa un valor aleatorio para `PASE_SECRET`. Sin él, se usa `TURNSTILE_SECRET` para firmar el pase.
+Si falta `TURNSTILE_SECRET`, el Worker omite Turnstile y permite el modo de pruebas.
+El pase dura una hora. Turnstile se abre en una ventana separada porque la app usa COEP.
+Al terminar, esa ventana vuelve al origen de la app y entrega el token por BroadcastChannel.
+
+Se aplican límites por IP de 10 solicitudes por minuto para HTML y firmas, y 30 para IA.
+Los topes diarios son 25 conversiones HTML, 350 operaciones de firmas y 200 000 unidades de IA
+basadas en caracteres y el costo por operación. Los contadores usan Durable Objects con SQLite
+y se reinician a medianoche UTC. Las escrituras de KV se reservan para los archivos de firmas.
+
+### Datos y caducidad
+
+- **HTML a PDF.** Envía la URL pública o el contenido del archivo HTML y las opciones. El Worker
+  procesa la página en Browser Rendering con JavaScript desactivado. Un archivo HTML puede usar
+  recursos incrustados. La app no guarda la entrada ni el PDF después de la conversión.
+- **Pedir firmas.** El PDF, el nombre y el mensaje viajan en un bloque AES-GCM de 256 bits cifrado
+  en el navegador. Cloudflare KV guarda el original y el firmado con el mismo vencimiento,
+  siete días después de crear la solicitud. Un Durable Object coordina las subidas y guarda el
+  estado, vencimiento y los hashes de los tokens. El dueño puede borrar la solicitud antes.
+  El fragmento del enlace contiene la clave y solo se usa en el navegador. Los enlaces del dueño
+  se guardan localmente para volver a abrirlos.
+- **Traducir y resumir.** Primero se intenta la IA integrada en el navegador. Con permiso,
+  Cloudflare Workers AI recibe texto extraído y las opciones de idioma o extensión. Navaja PDF
+  no persiste ese texto ni el resultado en el servidor. La pantalla identifica qué motor se usó.
+
+### Probar en local
+
+Desde `servidor/`:
+
+```sh
+deno install
+deno run -A npm:wrangler@4 dev --local --port 8787 --var MODO_PRUEBAS:1
+```
+
+El modo de pruebas simula HTML a PDF y la IA. KV, los Durable Objects y los límites usan el
+entorno local de Wrangler. Sirve la app desde la raíz del repo en el puerto 8799 con los
+encabezados de `_headers`. Para probar Turnstile, agrega las variables locales
+`TURNSTILE_SITEKEY=1x00000000000000000000AA` y
+`TURNSTILE_SECRET=1x0000000000000000000000000000000AA` en `servidor/.dev.vars`.
+No configures `MODO_PRUEBAS` ni uses esas claves en producción.

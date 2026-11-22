@@ -17,7 +17,7 @@ import datetime
 
 NOMBRE = "Navaja PDF"
 SITIO = "https://convertidor.abner8963.workers.dev/"   # dirección principal (la que Google debe mostrar)
-LEMA = "Herramientas de PDF e imágenes gratis, sin subir tus archivos"
+LEMA = "Herramientas gratis de PDF e imágenes"
 
 RAIZ = pathlib.Path(__file__).parent
 
@@ -333,9 +333,39 @@ PAGINAS = [
      []),
 ]
 
+NUBE = {"html-a-pdf", "pedir-firmas-pdf", "traducir-pdf", "resumir-pdf"}
+
+PAGINAS += [
+    ("html-a-pdf", "html-a-pdf", "HTML a PDF",
+     "Convierte una página web pública o un archivo HTML en PDF. Elige tamaño, orientación, márgenes y fondo.",
+     ["Pega la dirección de la página o elige un archivo .html de hasta 2 MB.",
+      "Ajusta las opciones y presiona Convertir a PDF.", "Descarga el PDF o elige Seguir con…"],
+     [("¿Qué se manda al servidor?", "La dirección o el HTML y las opciones se mandan a Cloudflare Browser Rendering. Navaja PDF no guarda el PDF ni la entrada después de la conversión."),
+      ("¿Por qué faltan partes de la página?", "Se convierte el HTML público sin ejecutar JavaScript. Los archivos .html solo usan recursos que traigan incluidos.")]),
+    ("pedir-firmas-pdf", "pedir-firmas-pdf", "Pedir firmas",
+     "Pide a otra persona que firme un PDF y recoge el resultado con un enlace.",
+     ["Elige el PDF y, si quieres, escribe un mensaje.",
+      "Comparte el enlace para quien firma. Guarda tu enlace para recoger el resultado.",
+      "Revisa el estado y descarga el PDF una vez firmado."],
+     [("¿Qué se manda al servidor?", "Cloudflare guarda el PDF, el nombre y el mensaje cifrados durante 7 días como máximo. La clave solo va en el enlace. Puedes borrar la solicitud antes."),
+      ("¿Qué tipo de firma se agrega?", "Una firma dibujada o tomada de una foto, como al firmar con pluma.")]),
+    ("traducir-pdf", "traducir-pdf", "Traducir PDF",
+     "Traduce el texto de un PDF y descárgalo como Word editable y texto.",
+     ["Elige un PDF con texto y selecciona los idiomas.", "Presiona Traducir y espera a que se procesen los párrafos.",
+      "Descarga el archivo Word o el texto."],
+     [("¿Qué se manda al servidor?", "Si la IA de tu navegador está disponible, el texto se procesa en tu equipo. Si usas Cloudflare Workers AI, solo se envía el texto extraído y los idiomas. Navaja PDF no guarda el texto en el servidor."),
+      ("¿Puedo traducir un escaneo?", "Primero abre el PDF en Reconocer texto (OCR).")]),
+    ("resumir-pdf", "resumir-pdf", "Resumir PDF",
+     "Saca un resumen con viñetas del texto de un PDF y guárdalo como Markdown.",
+     ["Elige un PDF con texto.", "Selecciona la extensión y el idioma del resumen.",
+      "Lee, copia o descarga el resumen."],
+     [("¿Qué se manda al servidor?", "Si la IA de tu navegador está disponible, el texto se procesa en tu equipo. Si usas Cloudflare Workers AI, se envían el texto extraído, el idioma y la extensión. Navaja PDF no guarda el texto en el servidor."),
+      ("¿Qué pasa si el PDF es largo?", "La herramienta resume el texto por partes y reúne los resúmenes.")]),
+]
+
 INICIO = ("", "inicio", None,
           "Convierte Word, Excel y PowerPoint a PDF; une, divide, recorta, comprime, edita, firma, repara y protege tus PDF; llena formularios; "
-          "y comprime, recorta y convierte imágenes. Gratis, sin registro y sin subir tus archivos.",
+          "y comprime, recorta y convierte imágenes. También puedes pedir firmas, traducir y resumir. Gratis y sin registro.",
           None, None)
 
 e = lambda t: html.escape(t, quote=True)
@@ -343,21 +373,25 @@ e = lambda t: html.escape(t, quote=True)
 
 def titulo(p):
     corto = p[2]
-    return f"{NOMBRE} — {LEMA}" if corto is None else f"{corto} gratis y sin subir archivos | {NOMBRE}"
+    return f"{NOMBRE} — {LEMA}" if corto is None else f"{corto} gratis | {NOMBRE}" if p[0] in NUBE else f"{corto} gratis y sin subir archivos | {NOMBRE}"
 
 
 def ayuda(p):
     ruta, vista, corto, desc, pasos, preguntas = p
     if corto is None:
         cuerpo = (f"<h2>¿Por qué {e(NOMBRE)}?</h2>\n"
-                  "<p>Las páginas de este tipo suben tus archivos a sus servidores. Aquí no: todo se hace dentro de tu "
-                  "navegador, así que tus documentos nunca salen de tu computadora o celular.</p>\n")
+                  "<p>La mayoría de las herramientas procesan tus archivos en tu equipo. Las que pueden enviar "
+                  "datos a un servidor llevan la etiqueta «☁ Usa internet» y te avisan antes de hacerlo.</p>\n")
         preguntas = []
     else:
         cuerpo = (f"<h2>Cómo usar {e(corto)}</h2>\n<p>{e(desc)}</p>\n<ol>\n"
                   + "".join(f"<li>{e(x)}</li>\n" for x in pasos) + "</ol>\n")
+    comunes = COMUNES if ruta and ruta not in NUBE else [
+        ("¿Cuesta algo? ¿Hay que registrarse?", "Es gratis y sin registro. Las herramientas en el servidor están sujetas a límites de uso."),
+        ("¿Funciona sin internet?", "Las herramientas locales funcionan sin conexión después de cargar sus componentes. Para usar el servidor necesitas internet."),
+    ]
     cuerpo += "<h3>Preguntas frecuentes</h3>\n" + "".join(
-        f"<details><summary>{e(q)}</summary><p>{e(r)}</p></details>\n" for q, r in preguntas + COMUNES)
+        f"<details><summary>{e(q)}</summary><p>{e(r)}</p></details>\n" for q, r in preguntas + comunes)
     return f'<section class="tarjeta ayuda" id="ayuda" data-ruta="{ruta}">\n{cuerpo}</section>\n'
 
 
@@ -386,10 +420,11 @@ def main():
               "url": url, "description": d, "applicationCategory": "UtilitiesApplication", "operatingSystem": "Cualquiera (navegador)",
               "inLanguage": "es", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "MXN"}}
         pagina = f"""<!doctype html>
-<html lang="es">
+<html lang="es-MX">
 <head>
 <meta charset="utf-8">
 <base href="{'../' if ruta else './'}">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(t)}</title>
 <meta name="description" content="{e(d)}">
