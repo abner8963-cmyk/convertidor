@@ -7,16 +7,18 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "26";
+const VERSION = "27";
 const CACHE_COMPARTIDO = "convertidor-compartido";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice
 const CACHE_HEIC = "convertidor-heic-kvazaar-1";
 const ARCHIVOS_HEIC = new Set(["lib/libheif.js", "lib/libheif.wasm", "lib/heic-enc.mjs", "lib/heic-enc.wasm"]);
+const CACHE_FASE4 = "convertidor-fase4b-1";
 const CACHE_OCR = "convertidor-ocr-7.0.0";        // cambia solo si cambia Tesseract o sus idiomas
 const APP = ["./", "index.html", "app.js", "app.css", "manifest.webmanifest", "icono.svg", "icono-192.png", "icono-512.png", "partes.json",
              "comparar-pdf/", "pdf-a-markdown/", "pdf-a-powerpoint/", "pdf-a-excel/", "marca-de-agua-imagen/",
-             "lib/pdf-lib.min.js", "lib/pdf.min.mjs", "lib/pdf.worker.min.mjs", "lib/qpdf.js", "lib/qpdf.wasm", "lo/soffice.js", "lo/soffice.worker.js", "lo/browser.js", "lo/browser.worker.global.js"];
+             "pdf-a-pdfa/", "quitar-fondo/", "mejorar-foto/", "difuminar-caras/",
+             "lib/fase4/worker.js", "lib/pdf-lib.min.js", "lib/pdf.min.mjs", "lib/pdf.worker.min.mjs", "lib/qpdf.js", "lib/qpdf.wasm", "lo/soffice.js", "lo/soffice.worker.js", "lo/browser.js", "lo/browser.worker.global.js"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE_APP).then((c) => c.addAll(APP)).then(() => self.skipWaiting()));
@@ -25,7 +27,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
     for (const nombre of await caches.keys()) {
-      if (nombre !== CACHE_APP && nombre !== CACHE_LO && nombre !== CACHE_OCR && nombre !== CACHE_COMPARTIDO && nombre !== CACHE_HEIC) await caches.delete(nombre);
+      if (nombre !== CACHE_APP && nombre !== CACHE_LO && nombre !== CACHE_OCR && nombre !== CACHE_COMPARTIDO && nombre !== CACHE_HEIC && nombre !== CACHE_FASE4) await caches.delete(nombre);
     }
     await self.clients.claim();
   })());
@@ -158,6 +160,17 @@ self.addEventListener("fetch", (e) => {
   if (url.pathname.endsWith("/lo/soffice.data")) return e.respondWith(deLibreOffice(e.request, "soffice.data"));
   if (url.pathname.includes("/ocr/")) return e.respondWith(recursoBajoDemanda(e.request, CACHE_OCR));
   const ruta = url.pathname.slice(new URL(self.registration.scope).pathname.length);
+  if (ruta.startsWith("lib/fase4/") && ruta !== "lib/fase4/worker.js" && e.request.method === "GET") {
+    const cache = caches.open(CACHE_FASE4);
+    const respuesta = cache.then(async (c) => {
+      const guardada = await c.match(e.request);
+      if (guardada) return { resp: guardada };
+      const resp = await fetch(e.request);
+      return { resp, guardado: resp.ok ? c.put(e.request, resp.clone()).catch(() => {}) : undefined };
+    });
+    e.waitUntil(respuesta.then(({ guardado }) => guardado).catch(() => {}));
+    return e.respondWith(respuesta.then(({ resp }) => conCabeceras(resp)));
+  }
   if (ARCHIVOS_HEIC.has(ruta)) return e.respondWith(recursoBajoDemanda(e.request, CACHE_HEIC));
   if (url.pathname.includes("/lo/partes/")) return;      // los pedazos van directo a la red
   e.respondWith(deLaApp(e.request));

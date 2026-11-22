@@ -510,8 +510,9 @@ async function abrirPdf(f) {
   }
 }
 const RUTAS_PDF = ["unir", "dividir", "organizar", "girar-pdf", "comprimir", "numeros", "marca",
-  "proteger", "desbloquear", "firmar", "editar", "ocr", "recortarpdf", "pdfaword", "aimagenes", "compararpdf", "pdfamarkdown", "pdfapowerpoint", "pdfaexcel"];
-const RUTAS_IMG = ["imagenes", "comprimir-imagen", "cambiar-tamano", "convertir-imagen", "marcaimagen"];
+  "proteger", "desbloquear", "firmar", "editar", "ocr", "recortarpdf", "pdfaword", "aimagenes", "compararpdf", "pdfamarkdown", "pdfapowerpoint", "pdfaexcel", "pdfa"];
+const RUTAS_IMG = ["imagenes", "comprimir-imagen", "cambiar-tamano", "convertir-imagen", "marcaimagen",
+  "quitar-fondo", "mejorar-foto", "difuminar-caras"];
 const MIME_OFFICE = /^application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)$/i;
 
 function rutasParaArchivo(f, compartido = false) {
@@ -5524,4 +5525,283 @@ $("botonMI").onclick = async () => {
     previaMarcaImagen();
   }
 };
+
+function herramientaFase4(id, pdf = false) {
+  const el = (nombre) => $(nombre + id);
+  const barra = el("avance"), boton = el("boton"), archivo = el("archivo"), cancelar = el("cancelar");
+  const herramienta = { archivos: [], alRecibir: () => {}, trabajando: false };
+  let detener;
+  cancelar.onclick = () => detener?.(new DOMException("Operación cancelada.", "AbortError"));
+  zonaDeArchivos(el("zona"), archivo, (fs) => {
+    if (herramienta.trabajando || !fs.length) return;
+    const buenas = fs.filter(pdf ? esPdf : pareceImagen);
+    if (!buenas.length) {
+      aviso("aviso" + id, pdf ? "Elige un archivo PDF." : "Elige una imagen.", true);
+      return;
+    }
+    herramienta.archivos = pdf ? buenas.slice(0, 1) : buenas;
+    el("info").textContent = buenas.length === 1 || pdf ? buenas[0].name : `${buenas.length} imágenes`;
+    el("opciones").hidden = false;
+    herramienta.alRecibir();
+    aviso("aviso" + id, buenas.length < fs.length ? "Se omitieron archivos con otro formato." : "");
+  }, !pdf);
+  herramienta.ejecutar = async (tipo, opciones, terminar, archivos = herramienta.archivos) => {
+    if (herramienta.trabajando || !archivos.length) return;
+    const controles = [...el("opciones").querySelectorAll("button, input, select"),
+      ...(el("revision")?.querySelectorAll("button, input, select") ?? [])].filter((c) => c !== cancelar);
+    const estados = controles.map((c) => c.disabled);
+    herramienta.trabajando = archivo.disabled = true;
+    controles.forEach((c) => { c.disabled = true; });
+    cancelar.hidden = barra.hidden = false;
+    barra.removeAttribute("value");
+    aviso("aviso" + id, "Preparando…");
+    let worker;
+    try {
+      worker = new Worker(new URL("lib/fase4/worker.js", base), { type: "module" });
+      const valor = await new Promise((resolve, reject) => {
+        detener = reject;
+        worker.onmessage = ({ data }) => {
+          if (data.error) reject(new Error(data.error));
+          else if ("valor" in data) resolve(data.valor);
+          else {
+            aviso("aviso" + id, data.texto);
+            if (typeof data.avance === "number") barra.value = data.avance;
+            else barra.removeAttribute("value");
+          }
+        };
+        worker.onerror = () => reject(new Error("No se pudo iniciar la herramienta. Revisa tu conexión e inténtalo de nuevo."));
+        worker.postMessage({ tipo, archivos, opciones });
+      });
+      cancelar.hidden = true;
+      await terminar(valor);
+    } catch (e) {
+      aviso("aviso" + id, e.message, e.name !== "AbortError");
+    } finally {
+      worker?.terminate();
+      detener = null;
+      herramienta.trabajando = archivo.disabled = false;
+      cancelar.hidden = barra.hidden = true;
+      controles.forEach((c, i) => { c.disabled = estados[i]; });
+      boton.disabled = false;
+    }
+  };
+  herramienta.limpiar = () => {
+    for (const a of el("salida").querySelectorAll("a[download]")) URL.revokeObjectURL(a.href);
+    el("salida").replaceChildren();
+  };
+  herramienta.descargas = async ({ resultados, errores }, etiqueta, archivos = herramienta.archivos) => {
+    const hechos = [], nombres = new Set();
+    for (const { i, blob, w, h } of resultados) {
+      const raiz = sinExtImg(archivos[i].name).replace(/[\\/]/g, "_");
+      let nombre = `${raiz} (${etiqueta}).png`, n = 2;
+      while (nombres.has(nombre.toLowerCase())) nombre = `${raiz} (${etiqueta} ${n++}).png`;
+      nombres.add(nombre.toLowerCase());
+      hechos.push({ nombre, bytes: new Uint8Array(await blob.arrayBuffer()), tipo: "image/png", detalle: pxTxt(w, h) });
+    }
+    herramienta.limpiar();
+    const salida = el("salida");
+    if (hechos.length <= 12) {
+      for (const h of [...hechos].reverse()) filaDescarga(salida, h.bytes, h.nombre, h.detalle, h.tipo);
+    }
+    if (hechos.length > 1) {
+      filaDescarga(salida, zipSimple(hechos), `Imágenes (${etiqueta}).zip`, `${hechos.length} imágenes`, "application/zip", hechos);
+    }
+    aviso("aviso" + id, [hechos.length ? "Listo." : "", ...errores].filter(Boolean).join(" "), !!errores.length);
+  };
+  herramienta.alRecibir = herramienta.limpiar;
+  return herramienta;
+}
+
+const pdfa4 = herramientaFase4("PA", true);
+$("botonPA").onclick = () => {
+  const nivel = Number($("nivelPA").value), formato = `PDF/A-${nivel}b`;
+  pdfa4.ejecutar("pdfa", { nivel }, async (blob) => {
+    pdfa4.limpiar();
+    filaDescarga($("salidaPA"), new Uint8Array(await blob.arrayBuffer()),
+      `${sinExt(pdfa4.archivos[0].name)} (PDF-A-${nivel}b).pdf`, formato);
+    aviso("avisoPA", "Listo. Se encontraron los metadatos PDF/A y la referencia al perfil de color.");
+  });
+};
+
+const mejorar4 = herramientaFase4("MF");
+$("botonMF").onclick = () => {
+  const escala = Number($("escalaMF").value);
+  mejorar4.ejecutar("foto", { escala }, (r) => mejorar4.descargas(r, `×${escala}`));
+};
+
+const fondo4 = herramientaFase4("QF");
+let previaFondo4 = [], urlsFondo4 = [];
+function pintarFondo4() {
+  for (const u of urlsFondo4) URL.revokeObjectURL(u);
+  urlsFondo4 = [];
+  const r = previaFondo4[Number($("imagenQF").value)];
+  for (const [id, blob] of [["antesQF", r && fondo4.archivos[r.i]], ["despuesQF", r?.blob]]) {
+    if (blob) {
+      const u = URL.createObjectURL(blob);
+      urlsFondo4.push(u);
+      $(id).src = u;
+    } else $(id).removeAttribute("src");
+  }
+  $("campoColorQF").hidden = $("fondoQF").value !== "color";
+  $("despuesQF").style.background = $("fondoQF").value === "transparente" ? "" : colorFondo4();
+}
+const colorFondo4 = () => $("fondoQF").value === "blanco" ? "#ffffff" : $("colorQF").value;
+$("imagenQF").onchange = pintarFondo4;
+$("fondoQF").onchange = $("colorQF").oninput = () => { fondo4.limpiar(); pintarFondo4(); };
+fondo4.alRecibir = () => {
+  fondo4.limpiar();
+  previaFondo4 = [];
+  $("revisionQF").hidden = true;
+  pintarFondo4();
+};
+$("botonQF").onclick = () => fondo4.ejecutar("fondo", {}, ({ resultados, errores }) => {
+  fondo4.limpiar();
+  previaFondo4 = resultados;
+  $("imagenQF").replaceChildren(...resultados.map((r, i) => new Option(fondo4.archivos[r.i].name, String(i))));
+  $("revisionQF").hidden = !resultados.length;
+  pintarFondo4();
+  aviso("avisoQF", errores.join(" ") || "Revisa las vistas previas y prepara las descargas.", !!errores.length);
+});
+$("guardarQF").onclick = () => {
+  const archivos = previaFondo4.map((r) => fondo4.archivos[r.i]);
+  const mascaras = previaFondo4.map((r) => r.blob);
+  if ($("fondoQF").value === "transparente") {
+    const dimensiones = previaFondo4.map(({ w, h }) => ({ w, h }));
+    fondo4.ejecutar("copiar", { dimensiones }, (r) => fondo4.descargas(r, "sin fondo", archivos), mascaras);
+  } else {
+    fondo4.ejecutar("color", { color: colorFondo4() }, (r) => fondo4.descargas(r, "fondo nuevo", archivos), mascaras);
+  }
+};
+
+const caras4 = herramientaFase4("DC"), lienzoCaras4 = $("previaDC");
+let revisionCaras4 = [], mapaCaras4 = null, turnoCaras4 = 0, arrastreCaras4 = null;
+const caraActual4 = () => revisionCaras4[Number($("imagenDC").value)];
+
+function pintarCaras4(provisional) {
+  const ctx = lienzoCaras4.getContext("2d"), w = lienzoCaras4.width, h = lienzoCaras4.height;
+  ctx.clearRect(0, 0, w, h);
+  if (!mapaCaras4) return;
+  ctx.drawImage(mapaCaras4, 0, 0, w, h);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#fff";
+  ctx.shadowColor = "#000";
+  ctx.shadowBlur = 4;
+  for (const [i, r] of [...caraActual4().regiones, ...(provisional ? [provisional] : [])].entries()) {
+    ctx.strokeRect(r.x * w, r.y * h, r.w * w, r.h * h);
+    ctx.font = "bold 16px system-ui";
+    ctx.fillStyle = "#fff";
+    ctx.fillText(String(i + 1), r.x * w + 4, r.y * h + 18);
+  }
+  ctx.shadowBlur = 0;
+}
+
+function listaCaras4() {
+  const regiones = caraActual4()?.regiones || [];
+  $("regionesDC").replaceChildren(...regiones.map((r, i) => {
+    const li = document.createElement("li"), btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "secundario";
+    btn.textContent = `Quitar recuadro ${i + 1}`;
+    btn.onclick = () => {
+      if (caras4.trabajando) return;
+      regiones.splice(i, 1);
+      caras4.limpiar();
+      listaCaras4();
+    };
+    li.append(btn);
+    return li;
+  }));
+  pintarCaras4();
+}
+
+async function elegirCara4() {
+  const turno = ++turnoCaras4, r = caraActual4();
+  arrastreCaras4 = null;
+  mapaCaras4?.close();
+  mapaCaras4 = null;
+  listaCaras4();
+  if (!r) return;
+  try {
+    const mapa = await abrirImagen(caras4.archivos[r.i]);
+    if (turno !== turnoCaras4) { mapa.close(); return; }
+    mapaCaras4 = mapa;
+    const escala = Math.min(1, 720 / Math.max(mapa.width, mapa.height));
+    lienzoCaras4.width = Math.max(1, Math.round(mapa.width * escala));
+    lienzoCaras4.height = Math.max(1, Math.round(mapa.height * escala));
+    pintarCaras4();
+  } catch (e) { if (turno === turnoCaras4) aviso("avisoDC", e.message, true); }
+}
+
+$("imagenDC").onchange = elegirCara4;
+caras4.alRecibir = () => {
+  caras4.limpiar();
+  revisionCaras4 = [];
+  $("revisionDC").hidden = true;
+  elegirCara4();
+};
+$("botonDC").onclick = () => caras4.ejecutar("caras", {}, async ({ resultados, errores }) => {
+  caras4.limpiar();
+  revisionCaras4 = resultados;
+  $("imagenDC").replaceChildren(...resultados.map((r, i) => new Option(caras4.archivos[r.i].name, String(i))));
+  $("revisionDC").hidden = !resultados.length;
+  await elegirCara4();
+  aviso("avisoDC", errores.join(" ") || "Revisa las caras detectadas en cada imagen.", !!errores.length);
+});
+const limitar01 = (v) => Math.max(0, Math.min(1, v));
+function agregarCara4(r) {
+  if (caras4.trabajando || !caraActual4() || !Number.isFinite(r.x + r.y + r.w + r.h) || r.w <= 0 || r.h <= 0) return;
+  r.w = Math.min(r.w, 1 - r.x);
+  r.h = Math.min(r.h, 1 - r.y);
+  if (r.w <= 0 || r.h <= 0) return;
+  caraActual4().regiones.push(r);
+  caras4.limpiar();
+  listaCaras4();
+}
+$("agregarDC").onclick = () => agregarCara4({
+  x: limitar01($("xDC").valueAsNumber / 100), y: limitar01($("yDC").valueAsNumber / 100),
+  w: $("anchoDC").valueAsNumber / 100, h: $("altoDC").valueAsNumber / 100,
+});
+function puntoCara4(e) {
+  const r = lienzoCaras4.getBoundingClientRect();
+  return { x: limitar01((e.clientX - r.left) / r.width), y: limitar01((e.clientY - r.top) / r.height) };
+}
+function rectCara4(a, b) {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) };
+}
+lienzoCaras4.onpointerdown = (e) => {
+  if (caras4.trabajando || !mapaCaras4 || e.button !== 0 || arrastreCaras4) return;
+  arrastreCaras4 = { id: e.pointerId, punto: puntoCara4(e) };
+  lienzoCaras4.setPointerCapture(e.pointerId);
+};
+lienzoCaras4.onpointermove = (e) => {
+  if (arrastreCaras4?.id === e.pointerId) pintarCaras4(rectCara4(arrastreCaras4.punto, puntoCara4(e)));
+};
+lienzoCaras4.onpointerup = (e) => {
+  if (arrastreCaras4?.id !== e.pointerId) return;
+  const r = rectCara4(arrastreCaras4.punto, puntoCara4(e));
+  arrastreCaras4 = null;
+  if (r.w * lienzoCaras4.width >= 4 && r.h * lienzoCaras4.height >= 4) agregarCara4(r);
+  else pintarCaras4();
+};
+lienzoCaras4.onlostpointercapture = () => { arrastreCaras4 = null; pintarCaras4(); };
+$("efectoDC").onchange = $("intensidadDC").oninput = caras4.limpiar;
+$("guardarDC").onclick = () => {
+  if (!revisionCaras4.some((r) => r.regiones.length)) {
+    aviso("avisoDC", "Agrega al menos un recuadro antes de guardar.", true);
+    return;
+  }
+  const editadas = revisionCaras4.filter((r) => r.regiones.length);
+  const archivos = editadas.map((r) => caras4.archivos[r.i]);
+  const opciones = {
+    efecto: $("efectoDC").value,
+    intensidad: Number($("intensidadDC").value),
+    regiones: editadas.map((r) => r.regiones),
+  };
+  caras4.ejecutar("ocultar", opciones, (r) => {
+    const omitidas = revisionCaras4.length - editadas.length;
+    if (omitidas) r.errores.push(`Se omitieron ${omitidas} imágenes sin recuadros.`);
+    return caras4.descargas(r, "caras cubiertas", archivos);
+  }, archivos);
+};
+
 verVista();

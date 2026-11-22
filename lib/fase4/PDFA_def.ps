@@ -1,0 +1,38 @@
+%!
+% This is a sample prefix file for creating a PDF/A document.
+% Users should modify entries marked with "Customize".
+% This assumes an ICC profile resides in the file (/srgb.icc),
+% in the current directory unless the user modifies the corresponding line below.
+
+% Define an ICC profile :
+/ICCProfile (/srgb.icc) % Customise
+def
+
+[/_objdef {icc_PDFA} /type /stream /OBJ pdfmark
+
+[{icc_PDFA} << /N 3
+>> /PUT pdfmark
+[
+{icc_PDFA}
+{ICCProfile (r) file} stopped
+{
+  (\n\tFailed to open the supplied ICCProfile for reading. This may be due to\n) print
+  (\t  an incorrect filename or a failure to add --permit-file-read=<profile>\n) print
+  (\t  to the command line. This PostScript program needs to open the file\n) print
+  (\t  and you must explicitly grant it permission to do so.\n\n) print
+  (\tPDF/A processing aborted, output may not be a PDF/A file.\n\n) print
+  cleartomark
+}
+{
+  /PUT pdfmark
+  % Define the output intent dictionary :
+
+  [/_objdef {OutputIntent_PDFA} /type /dict /OBJ pdfmark
+  [{OutputIntent_PDFA} <<
+    /Type /OutputIntent               % Must be so (the standard requires).
+    /S /GTS_PDFA1                     % Must be so (the standard requires).
+    /DestOutputProfile {icc_PDFA}     % Must be so (see above).
+    /OutputConditionIdentifier (sRGB) % Customize
+  >> /PUT pdfmark
+  [{Catalog} <</OutputIntents [ {OutputIntent_PDFA} ]>> /PUT pdfmark
+} ifelse

@@ -1,5 +1,11 @@
 # Navaja PDF
 
+## Licencia
+
+Copyright (C) 2026 abner8963-cmyk y colaboradores
+
+Navaja PDF se distribuye bajo [AGPL-3.0-or-later](LICENSE). Los componentes de terceros conservan sus licencias.
+
 Convierte Word, Excel y PowerPoint (y ODT, ODS, ODP, RTF, TXT, CSV) a PDF **dentro del navegador**:
 los archivos nunca salen del dispositivo.
 
@@ -140,6 +146,42 @@ Para guardar HEIC se usa un codificador WebAssembly de libheif 1.23.6
 También incluye el runtime de Emscripten, musl y componentes de LLVM.
 Consulta las [licencias](lib/heic-enc.LICENSE) y la [receta de compilación](lib/heic-enc.BUILD.md).
 El navegador carga el codificador al guardar HEIC por primera vez y lo guarda para uso sin conexión.
+
+## PDF a PDF/A y herramientas con modelos de imagen
+
+Cada herramienta nueva tiene su página, se puede abrir desde «Seguir con…» y recibe archivos desde
+«Compartir». Los archivos se procesan en un Web Worker. El motor y los modelos se descargan al
+iniciar la operación, con una barra de avance, y quedan en Cache Storage para usarlos sin conexión.
+
+| Componente | Versión o revisión | Licencia | Descarga |
+| --- | --- | --- | ---: |
+| [Ghostscript](https://github.com/ArtifexSoftware/ghostpdl/tree/2d6e764c1f4a73520ed6de6dd3fa78ad30cd6a63) y [paquete WASM](https://www.npmjs.com/package/@okathira/ghostpdl-wasm/v/1.1.0) | 10.06.0 / 1.1.0 | AGPL-3.0-or-later | 15.57 MB |
+| [Perfil sRGB ICC de Artifex](https://github.com/ArtifexSoftware/ghostpdl/blob/2d6e764c1f4a73520ed6de6dd3fa78ad30cd6a63/iccprofiles/srgb.icc) y [PDFA_def.ps](https://github.com/ArtifexSoftware/ghostpdl/blob/2d6e764c1f4a73520ed6de6dd3fa78ad30cd6a63/lib/PDFA_def.ps) | Misma revisión de Ghostscript | AGPL-3.0-or-later | 4 KB |
+| [ONNX Runtime Web](https://www.npmjs.com/package/onnxruntime-web/v/1.22.0) | 1.22.0 | MIT y [avisos de terceros](lib/fase4/ONNXRuntime.NOTICES) | 11.28 MB en WASM o 22.27 MB en WebGPU |
+| [MODNet de retrato, exportación ONNX de Xenova](https://huggingface.co/Xenova/modnet/tree/fa2fa546052fba4c08921230a26cc69a333fca12) | FP32, `fa2fa54` | Apache-2.0 para [código y pesos](https://github.com/ZHKKKe/MODNet#license) | 25.89 MB |
+| [Real-ESRGAN, exportación ONNX](https://huggingface.co/CoderViking/realesr-general-x4v3-onnx/tree/c6a971706797c7502945a2b4c4274fce4900d4ab) | `realesr-general-x4v3`, opset 17, [pesos v0.2.5.0](https://github.com/xinntao/Real-ESRGAN/releases/tag/v0.2.5.0) | BSD-3-Clause para [el modelo exportado](https://huggingface.co/CoderViking/realesr-general-x4v3-onnx/blob/c6a971706797c7502945a2b4c4274fce4900d4ab/README.md#license) | 4.87 MB |
+| [YuNet de OpenCV Zoo](https://github.com/opencv/opencv_zoo/tree/f12e12798e8314f7c074a6656816c048dcc95b7a/models/face_detection_yunet) | ONNX FP32 2023mar | MIT, [licencia del modelo](lib/fase4/YuNet.LICENSE) | 0.23 MB |
+
+Los tamaños son decimales y corresponden a los archivos antes de la compresión HTTP. Las licencias
+y avisos se encuentran en [lib/fase4](lib/fase4/). MODNet se distribuye en dos partes (20 MB y 5.89 MB).
+El [manifiesto](lib/fase4/modnet.partes.json) incluye el tamaño y SHA-256 de ambas partes y del modelo completo.
+ONNX Runtime se comparte entre las herramientas de imagen que usan el mismo motor.
+
+- **PDF a PDF/A.** Ofrece 2b (predeterminado), 1b y 3b con conversión RGB. En 1b Ghostscript aplana la
+  transparencia a 150 ppp. Se comprueban el identificador XMP y la referencia al perfil de color.
+  Para certificar conformidad se necesita un validador independiente. Los PDF protegidos requieren
+  quitar la contraseña primero. Consulta el [origen y la receta del WASM](lib/gs.BUILD.md).
+- **Quitar fondo.** MODNet separa personas en retratos. Admite lotes y muestra el antes y el después.
+  Guarda PNG con fondo transparente, blanco o de color. Intenta WebGPU con un adaptador de hardware y usa WASM cuando el
+  navegador o el modelo no pueden usar la GPU.
+- **Mejorar y ampliar foto.** Real-ESRGAN procesa mosaicos superpuestos y recorta los bordes de cada
+  mosaico al unirlos. La salida es PNG ×4 o ×2; ×2 reduce la salida del modelo a la mitad.
+  Límite de entrada de 1 megapíxel y 1600 px por lado. Se puede cancelar durante el procesamiento.
+- **Difuminar caras.** YuNet detecta rostros en lotes. Puedes quitar o dibujar recuadros y ajustar
+  la intensidad del difuminado o pixelado antes de guardar. Revisa las caras pequeñas, giradas o
+  parcialmente cubiertas. La descarga omite las imágenes que quedaron sin recuadros.
+
+Quitar fondo y Difuminar caras admiten imágenes de hasta 20 megapíxeles y 8192 px por lado.
 
 ## Seguir con otra herramienta
 
