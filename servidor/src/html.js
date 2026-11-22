@@ -112,6 +112,19 @@ async function renderizar(env, url, html, opciones) {
           scrollTo(0, 0);
         }).catch(() => {});
         await page.waitForNetworkIdle({ idleTime: 500, timeout: 4000 }).catch(() => {});
+        // Barras fijas (position: fixed/sticky) se repiten en cada hoja del PDF y tapan
+        // el texto: las de arriba quedan solo al inicio; las flotantes (chat, cookies) se quitan.
+        await page.evaluate(() => {
+          for (const el of document.querySelectorAll("body *")) {
+            const estilo = getComputedStyle(el);
+            if (estilo.position === "sticky") el.style.setProperty("position", "static", "important");
+            else if (estilo.position === "fixed") {
+              const caja = el.getBoundingClientRect();
+              if (caja.top < 200 && caja.height < innerHeight * 0.5) el.style.setProperty("position", "absolute", "important");
+              else el.style.setProperty("display", "none", "important");
+            }
+          }
+        }).catch(() => {});
       } else {
         await page.setContent('<meta http-equiv="Content-Security-Policy" content="default-src data: blob:; style-src \'unsafe-inline\' data:; ' + csp + '">' + html,
           { waitUntil: "networkidle0", timeout: 20_000 });
