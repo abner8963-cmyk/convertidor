@@ -8,7 +8,7 @@ import { ia } from "./ia.js";
 export { Solicitud } from "./firmas.js";
 
 const HORA = 3600;
-const cuotas = { HTML: 25, IA: 200_000, FIRMAS: 350, PASE: 1500 };
+const cuotas = { HTML: 50, IA: 200_000, FIRMAS: 350, PASE: 1500 };
 const cuota = (env, tipo, unidades = 1) => env.CUOTA.getByName(tipo).consumir(cuotas[tipo], unidades);
 export class Cuota extends DurableObject {
   consumir(maximo, unidades) {

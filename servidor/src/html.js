@@ -5,7 +5,7 @@ import { codificar, error, leerJson } from "./comun.js";
 
 const papel = { carta: { format: "Letter" }, a4: { format: "A4" }, oficio: { width: "216mm", height: "340mm" } };
 const margenes = { normal: "0.75in", chico: "0.35in", ninguno: "0in" };
-const topeHtml = 2_000_000;
+const topeHtml = 10_000_000;
 
 function esIpPublica(ip) {
   if (!ipaddr.isValid(ip)) return false;
@@ -142,12 +142,12 @@ async function renderizar(env, url, html, opciones) {
 }
 
 export async function htmlAPdf(req, env) {
-  const { url, html, tamano = "carta", horizontal = false, margen = "normal", fondo = false } = await leerJson(req, 12_001_000);
+  const { url, html, tamano = "carta", horizontal = false, margen = "normal", fondo = false } = await leerJson(req, 25_000_000);
   if ((typeof url === "string") === (typeof html === "string") || (url !== undefined && typeof url !== "string")
       || (html !== undefined && (typeof html !== "string" || !html.trim()))
       || !Object.hasOwn(papel, tamano) || !Object.hasOwn(margenes, margen)
       || typeof horizontal !== "boolean" || typeof fondo !== "boolean") error(400, "Envía una dirección o un archivo HTML y elige opciones válidas.");
-  if (html && codificar.encode(html).length > topeHtml) error(413, "El archivo HTML debe pesar hasta 2 MB.");
+  if (html && codificar.encode(html).length > topeHtml) error(413, "El archivo HTML debe pesar hasta 10 MB.");
   if (url?.length > 4096) error(400, "La dirección de la página es demasiado larga.");
   const destino = url !== undefined ? urlPublica(url) : null;
   const m = margenes[margen];

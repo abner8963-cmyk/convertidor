@@ -5969,6 +5969,53 @@ function mensajeNube(e) {
   return e.name === "AbortError" ? "Operación cancelada." : e.message || "No se pudo completar la operación.";
 }
 
+async function imprimirHtmlLocal(datos) {
+  const papel = { carta: "Letter", a4: "A4" };
+  const margenes = { normal: "0.75in", chico: "0.35in", ninguno: "0in" };
+  const orientacion = datos.horizontal ? "landscape" : "portrait";
+  // Con medidas explícitas, la orientación se indica con el orden de los lados.
+  const tamano = datos.tamano === "oficio"
+    ? (datos.horizontal ? "340mm 216mm" : "216mm 340mm")
+    : papel[datos.tamano] + " " + orientacion;
+  const colores = datos.fondo ? "* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }" : "";
+  const estilo = `<style>@page { size: ${tamano}; margin: ${margenes[datos.margen]}; } ${colores}</style>`;
+  const head = /<head\b[^>]*>/i;
+  const html = head.test(datos.html)
+    ? datos.html.replace(head, (etiqueta) => etiqueta + estilo)
+    : datos.html.replace(/^(\s*(?:<!doctype\s+[^>]*>)?)/i, (inicio) => inicio + estilo);
+
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("sandbox", "allow-same-origin allow-modals");
+  iframe.style.cssText = "position: fixed; left: -10000px; top: 0; width: 816px; height: 1056px; border: 0;";
+  const cargado = new Promise((listo) => iframe.addEventListener("load", listo, { once: true }));
+  iframe.srcdoc = html;
+  document.body.append(iframe);
+  let retiro;
+  const retirar = () => {
+    clearTimeout(retiro);
+    iframe.remove();
+  };
+  try {
+    await cargado;
+    const ventana = iframe.contentWindow;
+    let esperaFuentes;
+    try {
+      await Promise.race([
+        ventana.document.fonts?.ready,
+        new Promise((listo) => { esperaFuentes = setTimeout(listo, 5000); }),
+      ]);
+    } finally {
+      clearTimeout(esperaFuentes);
+    }
+    ventana.addEventListener("afterprint", retirar, { once: true });
+    retiro = setTimeout(retirar, 600_000);
+    ventana.print();
+  } catch (e) {
+    retirar();
+    throw e;
+  }
+}
+
 const modoHtml = () => document.querySelector('input[name="entradaHtml"]:checked').value;
 for (const control of document.querySelectorAll('input[name="entradaHtml"]')) control.onchange = () => {
   $("campoUrlHtml").hidden = modoHtml() !== "url";
@@ -5977,24 +6024,37 @@ for (const control of document.querySelectorAll('input[name="entradaHtml"]')) co
 $("botonHtml").onclick = async () => {
   $("botonHtml").disabled = true;
   try {
+    const modo = modoHtml();
     const datos = {
       tamano: $("papelHtml").value, horizontal: $("orientacionHtml").value === "horizontal",
       margen: $("margenHtml").value, fondo: $("fondoHtml").checked,
     };
     let nombre;
-    if (modoHtml() === "url") {
+    if (modo === "url") {
       datos.url = $("urlHtml").value.trim();
       if (!/^https?:\/\//i.test(datos.url) || !$("urlHtml").validity.valid) throw new Error("Escribe una dirección que empiece con http:// o https://.");
       nombre = new URL(datos.url).hostname + ".pdf";
     } else {
       const f = $("archivoHtml").files[0];
       if (!f) throw new Error("Primero elige un archivo .html.");
-      if (f.size > 2_000_000) throw new Error("El archivo HTML debe pesar hasta 2 MB.");
+      if (f.size > 10_000_000) throw new Error("El archivo HTML debe pesar hasta 10 MB.");
       datos.html = await f.text();
       nombre = f.name.replace(/\.html?$/i, "") + ".pdf";
     }
     aviso("avisoHtml", "Preparando el PDF…");
-    const r = await usarNube("html-a-pdf", "/html-a-pdf", cuerpoJson(datos));
+    let r;
+    try {
+      r = await usarNube("html-a-pdf", "/html-a-pdf", cuerpoJson(datos));
+    } catch (e) {
+      if (e.status !== 429) throw e;
+      if (modo === "url") {
+        aviso("avisoHtml", "Se acabó el servicio de hoy para direcciones web. Intenta mañana, o guarda la página como archivo .html y súbela.", true);
+      } else {
+        await imprimirHtmlLocal(datos);
+        aviso("avisoHtml", "Se acabó el servicio de hoy, así que se abrió la ventana de impresión de tu navegador: elige “Guardar como PDF”.");
+      }
+      return;
+    }
     filaDescarga($("salidaHtml"), new Uint8Array(await r.arrayBuffer()), nombre, "HTML convertido");
     aviso("avisoHtml", "Listo.");
   } catch (e) {
