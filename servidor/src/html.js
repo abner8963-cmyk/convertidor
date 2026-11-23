@@ -68,7 +68,7 @@ function pdfDePrueba() {
     + `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
 }
 
-async function renderizar(env, url, html, opciones) {
+async function renderizar(env, url, html, diseno, opciones) {
   if (url) await validarDns(url, AbortSignal.timeout(5000));
   const browser = await puppeteer.launch(env.BROWSER);
   try {
@@ -112,6 +112,15 @@ async function renderizar(env, url, html, opciones) {
           scrollTo(0, 0);
         }).catch(() => {});
         await page.waitForNetworkIdle({ idleTime: 500, timeout: 4000 }).catch(() => {});
+      } else {
+        if (diseno === "larga") {
+          await page.setViewport({ width: 1280, height: 900 });
+          await page.emulateMediaType("screen");
+        }
+        await page.setContent('<meta http-equiv="Content-Security-Policy" content="default-src data: blob:; style-src \'unsafe-inline\' data:; ' + csp + '">' + html,
+          { waitUntil: "networkidle0", timeout: 20_000 });
+      }
+      if (url || diseno === "larga") {
         // Barras fijas (position: fixed/sticky) se repiten en cada hoja del PDF y tapan
         // el texto: las de arriba quedan solo al inicio; las flotantes (chat, cookies) se quitan.
         await page.evaluate(() => {
@@ -125,15 +134,22 @@ async function renderizar(env, url, html, opciones) {
             }
           }
         }).catch(() => {});
-      } else {
-        await page.setContent('<meta http-equiv="Content-Security-Policy" content="default-src data: blob:; style-src \'unsafe-inline\' data:; ' + csp + '">' + html,
-          { waitUntil: "networkidle0", timeout: 20_000 });
       }
     } catch (e) {
       console.error("html-a-pdf carga:", e?.name, e?.message);
       if (e.status) throw e;
       if (e.name === "TimeoutError") error(504, "La página tardó más de 20 segundos en cargar.");
       error(422, "No pudimos abrir la página para convertirla.");
+    }
+    if (diseno === "larga") {
+      await page.addStyleTag({ content: "html,body{height:auto!important}" });
+      const alto = await page.evaluate(() => Math.ceil(Math.max(
+        document.documentElement.scrollHeight, document.body?.scrollHeight || 0,
+      )));
+      return await page.pdf({
+        width: "1280px", height: Math.min(alto, 19000) + "px",
+        margin: 0, printBackground: opciones.printBackground, timeout: 8000,
+      });
     }
     return await page.pdf({ ...opciones, timeout: 8000 });
   } finally {
@@ -142,9 +158,10 @@ async function renderizar(env, url, html, opciones) {
 }
 
 export async function htmlAPdf(req, env) {
-  const { url, html, tamano = "carta", horizontal = false, margen = "normal", fondo = false } = await leerJson(req, 25_000_000);
+  const { url, html, diseno = "hojas", tamano = "carta", horizontal = false, margen = "normal", fondo = false } = await leerJson(req, 25_000_000);
   if ((typeof url === "string") === (typeof html === "string") || (url !== undefined && typeof url !== "string")
       || (html !== undefined && (typeof html !== "string" || !html.trim()))
+      || (diseno !== "hojas" && diseno !== "larga")
       || !Object.hasOwn(papel, tamano) || !Object.hasOwn(margenes, margen)
       || typeof horizontal !== "boolean" || typeof fondo !== "boolean") error(400, "Envía una dirección o un archivo HTML y elige opciones válidas.");
   if (html && codificar.encode(html).length > topeHtml) error(413, "El archivo HTML debe pesar hasta 10 MB.");
@@ -152,7 +169,7 @@ export async function htmlAPdf(req, env) {
   const destino = url !== undefined ? urlPublica(url) : null;
   const m = margenes[margen];
   try {
-    const pdf = env.MODO_PRUEBAS === "1" ? pdfDePrueba() : await renderizar(env, destino, html, {
+    const pdf = env.MODO_PRUEBAS === "1" ? pdfDePrueba() : await renderizar(env, destino, html, diseno, {
       ...papel[tamano], landscape: horizontal, printBackground: fondo, margin: { top: m, right: m, bottom: m, left: m },
     });
     return new Response(pdf, { headers: { "Content-Type": "application/pdf" } });

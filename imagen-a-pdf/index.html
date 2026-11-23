@@ -110,11 +110,12 @@
       <label id="campoUrlHtml" class="campo">Dirección de la página <input id="urlHtml" type="url" placeholder="https://ejemplo.com"></label>
       <label id="campoArchivoHtml" class="campo" hidden>Archivo de hasta 10 MB <input id="archivoHtml" type="file" accept=".html,.htm,text/html"></label>
       <div class="opciones">
+        <label class="campo">Diseño <select id="disenoHtml"><option value="hojas">Para leer en hojas</option><option value="larga">Una sola hoja larga (igual que la página)</option></select></label>
         <label class="campo">Tamaño <select id="papelHtml"><option value="carta">Carta</option><option value="a4">A4</option><option value="oficio">Oficio</option></select></label>
         <label class="campo">Orientación <select id="orientacionHtml"><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></label>
         <label class="campo">Márgenes <select id="margenHtml"><option value="normal">Normales</option><option value="chico">Chicos</option><option value="ninguno">Sin márgenes</option></select></label>
       </div>
-      <fieldset class="modo"><label><input id="fondoHtml" type="checkbox"> Incluir el fondo</label></fieldset>
+      <fieldset class="modo"><label><input id="fondoHtml" type="checkbox" checked> Incluir el fondo</label></fieldset>
       <div class="acciones"><button id="botonHtml">Convertir a PDF</button></div>
       <p class="aviso" id="avisoHtml" role="status"></p>
       <ul class="filas" id="salidaHtml"></ul>

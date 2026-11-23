@@ -7,7 +7,7 @@
 //    si por algo faltan, aquí se arman igual.
 // 3. Guarda la página y sus scripts para que funcione sin internet.
 
-const VERSION = "30";
+const VERSION = "31";
 const CACHE_COMPARTIDO = "convertidor-compartido";
 const CACHE_APP = "convertidor-app-" + VERSION;
 const CACHE_LO = "convertidor-lo-2.7.2";          // cambia solo si cambia LibreOffice

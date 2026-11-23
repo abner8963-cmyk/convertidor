@@ -5970,23 +5970,27 @@ function mensajeNube(e) {
 }
 
 async function imprimirHtmlLocal(datos) {
-  const papel = { carta: "Letter", a4: "A4" };
-  const margenes = { normal: "0.75in", chico: "0.35in", ninguno: "0in" };
-  const orientacion = datos.horizontal ? "landscape" : "portrait";
-  // Con medidas explícitas, la orientación se indica con el orden de los lados.
-  const tamano = datos.tamano === "oficio"
-    ? (datos.horizontal ? "340mm 216mm" : "216mm 340mm")
-    : papel[datos.tamano] + " " + orientacion;
+  const larga = datos.diseno === "larga";
   const colores = datos.fondo ? "* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }" : "";
-  const estilo = `<style>@page { size: ${tamano}; margin: ${margenes[datos.margen]}; } ${colores}</style>`;
-  const head = /<head\b[^>]*>/i;
-  const html = head.test(datos.html)
-    ? datos.html.replace(head, (etiqueta) => etiqueta + estilo)
-    : datos.html.replace(/^(\s*(?:<!doctype\s+[^>]*>)?)/i, (inicio) => inicio + estilo);
+  let html = datos.html;
+  if (!larga) {
+    const papel = { carta: "Letter", a4: "A4" };
+    const margenes = { normal: "0.75in", chico: "0.35in", ninguno: "0in" };
+    const orientacion = datos.horizontal ? "landscape" : "portrait";
+    // Con medidas explícitas, la orientación se indica con el orden de los lados.
+    const tamano = datos.tamano === "oficio"
+      ? (datos.horizontal ? "340mm 216mm" : "216mm 340mm")
+      : papel[datos.tamano] + " " + orientacion;
+    const estilo = `<style>@page { size: ${tamano}; margin: ${margenes[datos.margen]}; } ${colores}</style>`;
+    const head = /<head\b[^>]*>/i;
+    html = head.test(datos.html)
+      ? datos.html.replace(head, (etiqueta) => etiqueta + estilo)
+      : datos.html.replace(/^(\s*(?:<!doctype\s+[^>]*>)?)/i, (inicio) => inicio + estilo);
+  }
 
   const iframe = document.createElement("iframe");
   iframe.setAttribute("sandbox", "allow-same-origin allow-modals");
-  iframe.style.cssText = "position: fixed; left: -10000px; top: 0; width: 816px; height: 1056px; border: 0;";
+  iframe.style.cssText = `position: fixed; left: -10000px; top: 0; width: ${larga ? 1280 : 816}px; height: 1056px; border: 0;`;
   const cargado = new Promise((listo) => iframe.addEventListener("load", listo, { once: true }));
   iframe.srcdoc = html;
   document.body.append(iframe);
@@ -6007,6 +6011,13 @@ async function imprimirHtmlLocal(datos) {
     } finally {
       clearTimeout(esperaFuentes);
     }
+    if (larga) {
+      const doc = iframe.contentDocument;
+      const alto = Math.ceil(Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight || 0));
+      const estilo = doc.createElement("style");
+      estilo.textContent = `@page { size: 1280px ${Math.min(alto, 19000)}px; margin: 0; } @media print { html,body{height:auto} } ${colores}`;
+      doc.head.append(estilo);
+    }
     ventana.addEventListener("afterprint", retirar, { once: true });
     retiro = setTimeout(retirar, 600_000);
     ventana.print();
@@ -6021,11 +6032,18 @@ for (const control of document.querySelectorAll('input[name="entradaHtml"]')) co
   $("campoUrlHtml").hidden = modoHtml() !== "url";
   $("campoArchivoHtml").hidden = modoHtml() !== "html";
 };
+function actualizarDisenoHtml() {
+  const larga = $("disenoHtml").value === "larga";
+  for (const id of ["papelHtml", "orientacionHtml", "margenHtml"]) $(id).closest(".campo").hidden = larga;
+}
+$("disenoHtml").onchange = actualizarDisenoHtml;
+actualizarDisenoHtml();
 $("botonHtml").onclick = async () => {
   $("botonHtml").disabled = true;
   try {
     const modo = modoHtml();
     const datos = {
+      diseno: $("disenoHtml").value,
       tamano: $("papelHtml").value, horizontal: $("orientacionHtml").value === "horizontal",
       margen: $("margenHtml").value, fondo: $("fondoHtml").checked,
     };
