@@ -6,6 +6,8 @@ Copyright (C) 2026 abner8963-cmyk y colaboradores
 
 Navaja PDF se distribuye bajo [AGPL-3.0-or-later](LICENSE). Los componentes de terceros conservan sus licencias.
 
+`lib/pdf-lib.min.js` lleva un único cambio respecto al original: `PDFName.of` acepta también escapes hexadecimales en minúsculas.
+
 Convierte Word, Excel y PowerPoint (y ODT, ODS, ODP, RTF, TXT, CSV) a PDF **dentro del navegador**:
 los archivos nunca salen del dispositivo.
 
